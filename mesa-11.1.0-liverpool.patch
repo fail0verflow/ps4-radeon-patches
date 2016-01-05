@@ -1,0 +1,113 @@
+diff -ur mesa-11.1.0-orig/include/pci_ids/radeonsi_pci_ids.h mesa-11.1.0/include/pci_ids/radeonsi_pci_ids.h
+--- mesa-11.1.0-orig/include/pci_ids/radeonsi_pci_ids.h	2016-01-04 22:17:10.297910679 +0000
++++ mesa-11.1.0/include/pci_ids/radeonsi_pci_ids.h	2016-01-04 23:01:55.381202428 +0000
+@@ -122,6 +122,8 @@
+ CHIPSET(0x985E, MULLINS_985E, MULLINS)
+ CHIPSET(0x985F, MULLINS_985F, MULLINS)
+ 
++CHIPSET(0x9920, LIVERPOOL_9920, LIVERPOOL)
++
+ CHIPSET(0x1304, KAVERI_1304, KAVERI)
+ CHIPSET(0x1305, KAVERI_1305, KAVERI)
+ CHIPSET(0x1306, KAVERI_1306, KAVERI)
+diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeon/r600_pipe_common.c mesa-11.1.0/src/gallium/drivers/radeon/r600_pipe_common.c
+--- mesa-11.1.0-orig/src/gallium/drivers/radeon/r600_pipe_common.c	2016-01-04 22:17:10.470912620 +0000
++++ mesa-11.1.0/src/gallium/drivers/radeon/r600_pipe_common.c	2016-01-04 23:36:35.995875908 +0000
+@@ -426,6 +426,7 @@
+ 	case CHIP_BONAIRE: return "AMD BONAIRE";
+ 	case CHIP_KAVERI: return "AMD KAVERI";
+ 	case CHIP_KABINI: return "AMD KABINI";
++	case CHIP_LIVERPOOL: return "AMD LIVERPOOL";
+ 	case CHIP_HAWAII: return "AMD HAWAII";
+ 	case CHIP_MULLINS: return "AMD MULLINS";
+ 	case CHIP_TONGA: return "AMD TONGA";
+@@ -550,6 +551,7 @@
+ 	case CHIP_BONAIRE: return "bonaire";
+ 	case CHIP_KABINI: return "kabini";
+ 	case CHIP_KAVERI: return "kaveri";
++	case CHIP_LIVERPOOL: return "bonaire";
+ 	case CHIP_HAWAII: return "hawaii";
+ 	case CHIP_MULLINS:
+ 		return "mullins";
+diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeon/radeon_winsys.h mesa-11.1.0/src/gallium/drivers/radeon/radeon_winsys.h
+--- mesa-11.1.0-orig/src/gallium/drivers/radeon/radeon_winsys.h	2016-01-04 22:17:10.470912620 +0000
++++ mesa-11.1.0/src/gallium/drivers/radeon/radeon_winsys.h	2016-01-04 23:02:31.707614039 +0000
+@@ -131,6 +131,7 @@
+     CHIP_BONAIRE,
+     CHIP_KAVERI,
+     CHIP_KABINI,
++    CHIP_LIVERPOOL,
+     CHIP_HAWAII,
+     CHIP_MULLINS,
+     CHIP_TONGA,
+diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_pipe.c mesa-11.1.0/src/gallium/drivers/radeonsi/si_pipe.c
+--- mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_pipe.c	2016-01-04 22:17:10.481912744 +0000
++++ mesa-11.1.0/src/gallium/drivers/radeonsi/si_pipe.c	2016-01-04 23:09:26.835315624 +0000
+@@ -598,6 +598,7 @@
+ 	case CHIP_VERDE:
+ 	case CHIP_BONAIRE:
+ 	case CHIP_HAWAII:
++	case CHIP_LIVERPOOL:
+ 	case CHIP_TONGA:
+ 	case CHIP_FIJI:
+ 		sscreen->gs_table_depth = 32;
+diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_state.c mesa-11.1.0/src/gallium/drivers/radeonsi/si_state.c
+--- mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_state.c	2016-01-04 22:17:10.481912744 +0000
++++ mesa-11.1.0/src/gallium/drivers/radeonsi/si_state.c	2016-01-04 23:08:17.566531382 +0000
+@@ -3380,6 +3380,10 @@
+ 		raster_config = 0x00000000; /* 0x00000002 */
+ 		raster_config_1 = 0x00000000;
+ 		break;
++	case CHIP_LIVERPOOL:
++		raster_config = 0x2a00161a;
++		raster_config_1 = 0x00000000;
++		break;
+ 	case CHIP_KABINI:
+ 	case CHIP_MULLINS:
+ 	case CHIP_STONEY:
+diff -ur mesa-11.1.0-orig/src/gallium/targets/d3dadapter9/description.c mesa-11.1.0/src/gallium/targets/d3dadapter9/description.c
+--- mesa-11.1.0-orig/src/gallium/targets/d3dadapter9/description.c	2016-01-04 22:17:10.505913013 +0000
++++ mesa-11.1.0/src/gallium/targets/d3dadapter9/description.c	2016-01-04 23:30:00.950372059 +0000
+@@ -52,6 +52,7 @@
+     {"KAVERI",                      "AMD Radeon(TM) R7 Graphics"},
+     {"KABINI",                      "AMD Radeon HD 8400 / R3 Series"},
+     {"BONAIRE",                     "AMD Radeon HD 8770"},
++    {"LIVERPOOL",                   "AMD Liverpool (PlayStation 4)"},
+     {"OLAND",                       "AMD Radeon HD 8670"},
+     {"HAINAN",                      "AMD Radeon HD 8600M Series"},
+     {"TAHITI",                      "AMD Radeon HD 7900 Series"},
+diff -ur mesa-11.1.0-orig/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c mesa-11.1.0/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c
+--- mesa-11.1.0-orig/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2016-01-04 22:17:10.405911891 +0000
++++ mesa-11.1.0/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2016-01-04 23:31:02.604075374 +0000
+@@ -291,6 +291,7 @@
+     case CHIP_BONAIRE:
+     case CHIP_KAVERI:
+     case CHIP_KABINI:
++    case CHIP_LIVERPOOL:
+     case CHIP_HAWAII:
+     case CHIP_MULLINS:
+         ws->info.chip_class = CIK;
+@@ -438,6 +439,7 @@
+         case CHIP_TAHITI:
+         case CHIP_PITCAIRN:
+         case CHIP_BONAIRE:
++        case CHIP_LIVERPOOL:
+             ws->info.max_se = 2;
+             break;
+         case CHIP_HAWAII:
+@@ -469,12 +471,13 @@
+         ws->info.cik_macrotile_mode_array_valid = TRUE;
+     }
+ 
+-    /* Hawaii with old firmware needs type2 nop packet.
++    /* Hawaii with old firmware and liverpool need type2 nop packet.
+      * accel_working2 with value 3 indicates the new firmware.
+      */
+     ws->info.gfx_ib_pad_with_type2 = ws->info.chip_class <= SI ||
+ 				     (ws->info.family == CHIP_HAWAII &&
+-				      ws->accel_working2 < 3);
++				      ws->accel_working2 < 3) ||
++				     ws->info.family == CHIP_LIVERPOOL;
+ 
+     return TRUE;
+ }

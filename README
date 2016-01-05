@@ -1,0 +1,16 @@
+PS4 Linux userspace patches
+===========================
+
+These are some trivial patches to libdrm, mesa, and xf86-video-ati that are
+required to use 3D acceleration with the PlayStation 4 APU (Liverpool).
+They mostly just add the PCI ID required and a new chip type with the
+correct settings.
+
+LLVM could be patched too, but we don't really know what the optimal code
+generation settings are, so for now it's easier to just pretend it's
+Bonaire and leave LLVM alone.
+
+Since the patches are trivial, it doesn't make much sense to fork all the
+original source repos, hence the standalone diffs. Our intent is to get
+these upstreamed once performance and functionality are better verified.
+
