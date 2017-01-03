@@ -1,0 +1,100 @@
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_chipinfo_gen.h xf86-video-amdgpu-1.2.0/src/amdgpu_chipinfo_gen.h
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_chipinfo_gen.h	2017-01-02 17:32:49.432909312 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_chipinfo_gen.h	2017-01-02 17:34:49.724788279 +0100
+@@ -116,6 +116,7 @@
+  { 0x985D, CHIP_FAMILY_MULLINS },
+  { 0x985E, CHIP_FAMILY_MULLINS },
+  { 0x985F, CHIP_FAMILY_MULLINS },
++ { 0x9920, CHIP_FAMILY_LIVERPOOL },
+  { 0x1304, CHIP_FAMILY_KAVERI },
+  { 0x1305, CHIP_FAMILY_KAVERI },
+  { 0x1306, CHIP_FAMILY_KAVERI },
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_chipset_gen.h xf86-video-amdgpu-1.2.0/src/amdgpu_chipset_gen.h
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_chipset_gen.h	2017-01-02 17:32:49.431909350 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_chipset_gen.h	2017-01-02 17:34:49.724788279 +0100
+@@ -116,6 +116,7 @@
+   { PCI_CHIP_MULLINS_985D, "MULLINS" },
+   { PCI_CHIP_MULLINS_985E, "MULLINS" },
+   { PCI_CHIP_MULLINS_985F, "MULLINS" },
++  { PCI_CHIP_LIVERPOOL_9920, "LIVERPOOL" },
+   { PCI_CHIP_KAVERI_1304, "KAVERI" },
+   { PCI_CHIP_KAVERI_1305, "KAVERI" },
+   { PCI_CHIP_KAVERI_1306, "KAVERI" },
+@@ -203,6 +204,7 @@
+   { 0, "BONAIRE" },
+   { 0, "KABINI" },
+   { 0, "MULLINS" },
++  { 0, "LIVERPOOL" },
+   { 0, "KAVERI" },
+   { 0, "HAWAII" },
+   { 0, "TOPAZ" },
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_kms.c xf86-video-amdgpu-1.2.0/src/amdgpu_kms.c
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_kms.c	2017-01-02 17:32:49.431909350 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_kms.c	2017-01-02 17:36:10.957075719 +0100
+@@ -1415,8 +1415,9 @@
+ 	else
+ 		pAMDGPUEnt->HasCRTC2 = TRUE;
+ 
+-	if (info->ChipFamily >= CHIP_FAMILY_TAHITI &&
+-	    info->ChipFamily <= CHIP_FAMILY_HAINAN) {
++	if ((info->ChipFamily >= CHIP_FAMILY_TAHITI &&
++	     info->ChipFamily <= CHIP_FAMILY_HAINAN) ||
++	    info->ChipFamily == CHIP_FAMILY_LIVERPOOL) {
+ 		info->cursor_w = CURSOR_WIDTH;
+ 		info->cursor_h = CURSOR_HEIGHT;
+ 	} else {
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_pci_chipset_gen.h xf86-video-amdgpu-1.2.0/src/amdgpu_pci_chipset_gen.h
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_pci_chipset_gen.h	2017-01-02 17:32:49.432909312 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_pci_chipset_gen.h	2017-01-02 17:34:49.724788279 +0100
+@@ -116,6 +116,7 @@
+  { PCI_CHIP_MULLINS_985D, PCI_CHIP_MULLINS_985D, RES_SHARED_VGA },
+  { PCI_CHIP_MULLINS_985E, PCI_CHIP_MULLINS_985E, RES_SHARED_VGA },
+  { PCI_CHIP_MULLINS_985F, PCI_CHIP_MULLINS_985F, RES_SHARED_VGA },
++ { PCI_CHIP_LIVERPOOL_9920, PCI_CHIP_LIVERPOOL_9920, RES_SHARED_VGA },
+  { PCI_CHIP_KAVERI_1304, PCI_CHIP_KAVERI_1304, RES_SHARED_VGA },
+  { PCI_CHIP_KAVERI_1305, PCI_CHIP_KAVERI_1305, RES_SHARED_VGA },
+  { PCI_CHIP_KAVERI_1306, PCI_CHIP_KAVERI_1306, RES_SHARED_VGA },
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_pci_device_match_gen.h xf86-video-amdgpu-1.2.0/src/amdgpu_pci_device_match_gen.h
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_pci_device_match_gen.h	2017-01-02 17:32:49.433909274 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_pci_device_match_gen.h	2017-01-02 17:34:49.724788279 +0100
+@@ -116,6 +116,7 @@
+  ATI_DEVICE_MATCH( PCI_CHIP_MULLINS_985D, 0 ),
+  ATI_DEVICE_MATCH( PCI_CHIP_MULLINS_985E, 0 ),
+  ATI_DEVICE_MATCH( PCI_CHIP_MULLINS_985F, 0 ),
++ ATI_DEVICE_MATCH( PCI_CHIP_LIVERPOOL_9920, 0 ),
+  ATI_DEVICE_MATCH( PCI_CHIP_KAVERI_1304, 0 ),
+  ATI_DEVICE_MATCH( PCI_CHIP_KAVERI_1305, 0 ),
+  ATI_DEVICE_MATCH( PCI_CHIP_KAVERI_1306, 0 ),
+diff -urN xf86-video-amdgpu-1.2.0-old/src/amdgpu_probe.h xf86-video-amdgpu-1.2.0/src/amdgpu_probe.h
+--- xf86-video-amdgpu-1.2.0-old/src/amdgpu_probe.h	2017-01-02 17:32:49.432909312 +0100
++++ xf86-video-amdgpu-1.2.0/src/amdgpu_probe.h	2017-01-02 17:36:42.908109289 +0100
+@@ -68,6 +68,7 @@
+ 	CHIP_FAMILY_KABINI,
+ 	CHIP_FAMILY_HAWAII,
+ 	CHIP_FAMILY_MULLINS,
++	CHIP_FAMILY_LIVERPOOL,
+ 	CHIP_FAMILY_TOPAZ,
+ 	CHIP_FAMILY_TONGA,
+ 	CHIP_FAMILY_CARRIZO,
+diff -urN xf86-video-amdgpu-1.2.0-old/src/ati_pciids_gen.h xf86-video-amdgpu-1.2.0/src/ati_pciids_gen.h
+--- xf86-video-amdgpu-1.2.0-old/src/ati_pciids_gen.h	2017-01-02 17:32:49.432909312 +0100
++++ xf86-video-amdgpu-1.2.0/src/ati_pciids_gen.h	2017-01-02 17:34:49.724788279 +0100
+@@ -114,6 +114,7 @@
+ #define PCI_CHIP_MULLINS_985D 0x985D
+ #define PCI_CHIP_MULLINS_985E 0x985E
+ #define PCI_CHIP_MULLINS_985F 0x985F
++#define PCI_CHIP_LIVERPOOL_9920 0x9920
+ #define PCI_CHIP_KAVERI_1304 0x1304
+ #define PCI_CHIP_KAVERI_1305 0x1305
+ #define PCI_CHIP_KAVERI_1306 0x1306
+diff -urN xf86-video-amdgpu-1.2.0-old/src/pcidb/ati_pciids.csv xf86-video-amdgpu-1.2.0/src/pcidb/ati_pciids.csv
+--- xf86-video-amdgpu-1.2.0-old/src/pcidb/ati_pciids.csv	2017-01-02 17:32:49.433909274 +0100
++++ xf86-video-amdgpu-1.2.0/src/pcidb/ati_pciids.csv	2017-01-02 17:34:41.574177338 +0100
+@@ -115,6 +115,7 @@
+ "0x985D","MULLINS_985D","MULLINS","MULLINS"
+ "0x985E","MULLINS_985E","MULLINS","MULLINS"
+ "0x985F","MULLINS_985F","MULLINS","MULLINS"
++"0x9920","LIVERPOOL_9920","LIVERPOOL","LIVERPOOL"
+ "0x1304","KAVERI_1304","KAVERI","KAVERI"
+ "0x1305","KAVERI_1305","KAVERI","KAVERI"
+ "0x1306","KAVERI_1306","KAVERI","KAVERI"

@@ -1,6 +1,6 @@
-diff -ur mesa-11.1.0-orig/include/pci_ids/radeonsi_pci_ids.h mesa-11.1.0/include/pci_ids/radeonsi_pci_ids.h
---- mesa-11.1.0-orig/include/pci_ids/radeonsi_pci_ids.h	2016-01-04 22:17:10.297910679 +0000
-+++ mesa-11.1.0/include/pci_ids/radeonsi_pci_ids.h	2016-01-04 23:01:55.381202428 +0000
+diff -urN mesa-13.0.2-old/include/pci_ids/radeonsi_pci_ids.h mesa-13.0.2/include/pci_ids/radeonsi_pci_ids.h
+--- mesa-13.0.2-old/include/pci_ids/radeonsi_pci_ids.h	2017-01-02 17:54:00.225315261 +0100
++++ mesa-13.0.2/include/pci_ids/radeonsi_pci_ids.h	2017-01-02 17:54:07.971096863 +0100
 @@ -122,6 +122,8 @@
  CHIPSET(0x985E, MULLINS_985E, MULLINS)
  CHIPSET(0x985F, MULLINS_985F, MULLINS)
@@ -10,29 +10,22 @@ diff -ur mesa-11.1.0-orig/include/pci_ids/radeonsi_pci_ids.h mesa-11.1.0/include
  CHIPSET(0x1304, KAVERI_1304, KAVERI)
  CHIPSET(0x1305, KAVERI_1305, KAVERI)
  CHIPSET(0x1306, KAVERI_1306, KAVERI)
-diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeon/r600_pipe_common.c mesa-11.1.0/src/gallium/drivers/radeon/r600_pipe_common.c
---- mesa-11.1.0-orig/src/gallium/drivers/radeon/r600_pipe_common.c	2016-01-04 22:17:10.470912620 +0000
-+++ mesa-11.1.0/src/gallium/drivers/radeon/r600_pipe_common.c	2016-01-04 23:36:35.995875908 +0000
-@@ -426,6 +426,7 @@
- 	case CHIP_BONAIRE: return "AMD BONAIRE";
- 	case CHIP_KAVERI: return "AMD KAVERI";
- 	case CHIP_KABINI: return "AMD KABINI";
-+	case CHIP_LIVERPOOL: return "AMD LIVERPOOL";
- 	case CHIP_HAWAII: return "AMD HAWAII";
- 	case CHIP_MULLINS: return "AMD MULLINS";
- 	case CHIP_TONGA: return "AMD TONGA";
-@@ -550,6 +551,7 @@
- 	case CHIP_BONAIRE: return "bonaire";
- 	case CHIP_KABINI: return "kabini";
- 	case CHIP_KAVERI: return "kaveri";
-+	case CHIP_LIVERPOOL: return "bonaire";
- 	case CHIP_HAWAII: return "hawaii";
+diff -urN mesa-13.0.2-old/src/amd/common/ac_llvm_util.c mesa-13.0.2/src/amd/common/ac_llvm_util.c
+--- mesa-13.0.2-old/src/amd/common/ac_llvm_util.c	2017-01-02 17:54:00.112318479 +0100
++++ mesa-13.0.2/src/amd/common/ac_llvm_util.c	2017-01-02 18:15:53.990994519 +0100
+@@ -90,6 +90,8 @@
+ 		return "hawaii";
  	case CHIP_MULLINS:
  		return "mullins";
-diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeon/radeon_winsys.h mesa-11.1.0/src/gallium/drivers/radeon/radeon_winsys.h
---- mesa-11.1.0-orig/src/amd/common/amd_family.h	2016-01-04 22:17:10.470912620 +0000
-+++ mesa-11.1.0/src/amd/common/amd_family.h	2016-01-04 23:02:31.707614039 +0000
-@@ -131,6 +131,7 @@
++	case CHIP_LIVERPOOL:
++		return "bonaire";
+ 	case CHIP_TONGA:
+ 		return "tonga";
+ 	case CHIP_ICELAND:
+diff -urN mesa-13.0.2-old/src/amd/common/amd_family.h mesa-13.0.2/src/amd/common/amd_family.h
+--- mesa-13.0.2-old/src/amd/common/amd_family.h	2017-01-02 17:54:00.112318479 +0100
++++ mesa-13.0.2/src/amd/common/amd_family.h	2017-01-02 17:54:07.972096835 +0100
+@@ -82,6 +82,7 @@
      CHIP_BONAIRE,
      CHIP_KAVERI,
      CHIP_KABINI,
@@ -40,21 +33,95 @@ diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeon/radeon_winsys.h mesa-11.1.0
      CHIP_HAWAII,
      CHIP_MULLINS,
      CHIP_TONGA,
-diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_pipe.c mesa-11.1.0/src/gallium/drivers/radeonsi/si_pipe.c
---- mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_pipe.c	2016-01-04 22:17:10.481912744 +0000
-+++ mesa-11.1.0/src/gallium/drivers/radeonsi/si_pipe.c	2016-01-04 23:09:26.835315624 +0000
-@@ -598,6 +598,7 @@
+diff -urN mesa-13.0.2-old/src/amd/common/amdgpu_id.h mesa-13.0.2/src/amd/common/amdgpu_id.h
+--- mesa-13.0.2-old/src/amd/common/amdgpu_id.h	2017-01-02 17:54:00.112318479 +0100
++++ mesa-13.0.2/src/amd/common/amdgpu_id.h	2017-01-02 18:09:21.680883273 +0100
+@@ -108,6 +108,7 @@
+ enum {
+ 	KV_SPECTRE_A0      = 0x01,       /* KV1 with Spectre GFX core, 8-8-1-2 (CU-Pix-Primitive-RB) */
+ 	KV_SPOOKY_A0       = 0x41,       /* KV2 with Spooky GFX core, including downgraded from Spectre core, 3-4-1-1 (CU-Pix-Primitive-RB) */
++	LVP_STARSHA_A0     = 0x61,       /* LVP with Starsha GFX core */
+ 	KB_KALINDI_A0      = 0x81,       /* KB with Kalindi GFX core, 2-4-1-1 (CU-Pix-Primitive-RB) */
+ 	KB_KALINDI_A1      = 0x82,       /* KB with Kalindi GFX core, 2-4-1-1 (CU-Pix-Primitive-RB) */
+ 	BV_KALINDI_A2      = 0x85,       /* BV with Kalindi GFX core, 2-4-1-1 (CU-Pix-Primitive-RB) */
+@@ -122,6 +123,7 @@
+ 	((eChipRev >= KV_SPOOKY_A0) && (eChipRev < KB_KALINDI_A0))          /* identify all versions of SPOOKY and supported features set */
+ #define ASICREV_IS_KALINDI(eChipRev)	\
+ 	((eChipRev >= KB_KALINDI_A0) && (eChipRev < KV_UNKNOWN))           /* identify all versions of KALINDI and supported features set */
++	
+ 
+ /* Following macros are subset of ASICREV_IS_KALINDI macro */
+ #define ASICREV_IS_KALINDI_BHAVANI(eChipRev)	\
+diff -urN mesa-13.0.2-old/src/amd/vulkan/si_cmd_buffer.c mesa-13.0.2/src/amd/vulkan/si_cmd_buffer.c
+--- mesa-13.0.2-old/src/amd/vulkan/si_cmd_buffer.c	2017-01-02 17:54:00.116318365 +0100
++++ mesa-13.0.2/src/amd/vulkan/si_cmd_buffer.c	2017-01-02 18:14:04.116093349 +0100
+@@ -319,6 +319,10 @@
+ 		raster_config = 0x00000000;
+ 		raster_config_1 = 0x00000000;
+ 		break;
++	case CHIP_LIVERPOOL:
++		raster_config = 0x2a00161a;
++		raster_config_1 = 0x00000000;
++		break;
+ 	default:
+ 		fprintf(stderr,
+ 			"radeonsi: Unknown GPU, using 0 for raster_config\n");
+diff -urN mesa-13.0.2-old/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c mesa-13.0.2/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c
+--- mesa-13.0.2-old/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c	2017-01-02 17:54:00.115318394 +0100
++++ mesa-13.0.2/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c	2017-01-02 18:14:57.162537978 +0100
+@@ -100,6 +100,7 @@
+ 	case CHIP_KABINI: return "AMD RADV KABINI";
+ 	case CHIP_HAWAII: return "AMD RADV HAWAII";
+ 	case CHIP_MULLINS: return "AMD RADV MULLINS";
++	case CHIP_LIVERPOOL: return "AMD RADV LIVERPOOL";
+ 	case CHIP_TONGA: return "AMD RADV TONGA";
+ 	case CHIP_ICELAND: return "AMD RADV ICELAND";
+ 	case CHIP_CARRIZO: return "AMD RADV CARRIZO";
+@@ -228,6 +229,10 @@
+ 		ws->family = FAMILY_KV;
+ 		ws->rev_id = ML_GODAVARI_A0;
+ 		break;
++	case CHIP_LIVERPOOL:
++		ws->family = FAMILY_KV;
++		ws->rev_id = LVP_STARSHA_A0;
++		break;
+ 	case CHIP_TONGA:
+ 		ws->family = FAMILY_VI;
+ 		ws->rev_id = VI_TONGA_P_A0;
+diff -urN mesa-13.0.2-old/src/gallium/drivers/radeon/r600_pipe_common.c mesa-13.0.2/src/gallium/drivers/radeon/r600_pipe_common.c
+--- mesa-13.0.2-old/src/gallium/drivers/radeon/r600_pipe_common.c	2017-01-02 17:53:59.809327125 +0100
++++ mesa-13.0.2/src/gallium/drivers/radeon/r600_pipe_common.c	2017-01-02 17:54:07.972096835 +0100
+@@ -727,6 +727,7 @@
+ 	case CHIP_BONAIRE: return "AMD BONAIRE";
+ 	case CHIP_KAVERI: return "AMD KAVERI";
+ 	case CHIP_KABINI: return "AMD KABINI";
++	case CHIP_LIVERPOOL: return "AMD LIVERPOOL";
+ 	case CHIP_HAWAII: return "AMD HAWAII";
+ 	case CHIP_MULLINS: return "AMD MULLINS";
+ 	case CHIP_TONGA: return "AMD TONGA";
+@@ -853,6 +854,7 @@
+ 	case CHIP_BONAIRE: return "bonaire";
+ 	case CHIP_KABINI: return "kabini";
+ 	case CHIP_KAVERI: return "kaveri";
++	case CHIP_LIVERPOOL: return "bonaire";
+ 	case CHIP_HAWAII: return "hawaii";
+ 	case CHIP_MULLINS:
+ 		return "mullins";
+diff -urN mesa-13.0.2-old/src/gallium/drivers/radeonsi/si_pipe.c mesa-13.0.2/src/gallium/drivers/radeonsi/si_pipe.c
+--- mesa-13.0.2-old/src/gallium/drivers/radeonsi/si_pipe.c	2017-01-02 17:53:59.839326268 +0100
++++ mesa-13.0.2/src/gallium/drivers/radeonsi/si_pipe.c	2017-01-02 17:54:07.972096835 +0100
+@@ -723,6 +723,7 @@
  	case CHIP_VERDE:
  	case CHIP_BONAIRE:
  	case CHIP_HAWAII:
 +	case CHIP_LIVERPOOL:
  	case CHIP_TONGA:
  	case CHIP_FIJI:
- 		sscreen->gs_table_depth = 32;
-diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_state.c mesa-11.1.0/src/gallium/drivers/radeonsi/si_state.c
---- mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_state.c	2016-01-04 22:17:10.481912744 +0000
-+++ mesa-11.1.0/src/gallium/drivers/radeonsi/si_state.c	2016-01-04 23:08:17.566531382 +0000
-@@ -3380,6 +3380,10 @@
+ 	case CHIP_POLARIS10:
+diff -urN mesa-13.0.2-old/src/gallium/drivers/radeonsi/si_state.c mesa-13.0.2/src/gallium/drivers/radeonsi/si_state.c
+--- mesa-13.0.2-old/src/gallium/drivers/radeonsi/si_state.c	2017-01-02 17:53:59.838326297 +0100
++++ mesa-13.0.2/src/gallium/drivers/radeonsi/si_state.c	2017-01-02 17:54:07.974096779 +0100
+@@ -3867,6 +3867,10 @@
  		raster_config = 0x00000000; /* 0x00000002 */
  		raster_config_1 = 0x00000000;
  		break;
@@ -65,9 +132,9 @@ diff -ur mesa-11.1.0-orig/src/gallium/drivers/radeonsi/si_state.c mesa-11.1.0/sr
  	case CHIP_KABINI:
  	case CHIP_MULLINS:
  	case CHIP_STONEY:
-diff -ur mesa-11.1.0-orig/src/gallium/targets/d3dadapter9/description.c mesa-11.1.0/src/gallium/targets/d3dadapter9/description.c
---- mesa-11.1.0-orig/src/gallium/targets/d3dadapter9/description.c	2016-01-04 22:17:10.505913013 +0000
-+++ mesa-11.1.0/src/gallium/targets/d3dadapter9/description.c	2016-01-04 23:30:00.950372059 +0000
+diff -urN mesa-13.0.2-old/src/gallium/targets/d3dadapter9/description.c mesa-13.0.2/src/gallium/targets/d3dadapter9/description.c
+--- mesa-13.0.2-old/src/gallium/targets/d3dadapter9/description.c	2017-01-02 17:53:59.929323697 +0100
++++ mesa-13.0.2/src/gallium/targets/d3dadapter9/description.c	2017-01-02 17:54:07.974096779 +0100
 @@ -52,6 +52,7 @@
      {"KAVERI",                      "AMD Radeon(TM) R7 Graphics"},
      {"KABINI",                      "AMD Radeon HD 8400 / R3 Series"},
@@ -76,9 +143,22 @@ diff -ur mesa-11.1.0-orig/src/gallium/targets/d3dadapter9/description.c mesa-11.
      {"OLAND",                       "AMD Radeon HD 8670"},
      {"HAINAN",                      "AMD Radeon HD 8600M Series"},
      {"TAHITI",                      "AMD Radeon HD 7900 Series"},
-diff -ur mesa-11.1.0-orig/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c mesa-11.1.0/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c
---- mesa-11.1.0-orig/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2016-01-04 22:17:10.405911891 +0000
-+++ mesa-11.1.0/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2016-01-04 23:31:02.604075374 +0000
+diff -urN mesa-13.0.2-old/src/gallium/winsys/amdgpu/drm/amdgpu_winsys.c mesa-13.0.2/src/gallium/winsys/amdgpu/drm/amdgpu_winsys.c
+--- mesa-13.0.2-old/src/gallium/winsys/amdgpu/drm/amdgpu_winsys.c	2017-01-02 17:53:59.962322755 +0100
++++ mesa-13.0.2/src/gallium/winsys/amdgpu/drm/amdgpu_winsys.c	2017-01-02 18:09:53.995069669 +0100
+@@ -272,6 +272,9 @@
+       ws->family = FAMILY_KV;
+       ws->rev_id = ML_GODAVARI_A0;
+       break;
++   case CHIP_LIVERPOOL:
++      ws->family = FAMILY_KV;
++      ws->rev_id = LVP_STARSHA_A0;
+    case CHIP_TONGA:
+       ws->family = FAMILY_VI;
+       ws->rev_id = VI_TONGA_P_A0;
+diff -urN mesa-13.0.2-old/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c mesa-13.0.2/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c
+--- mesa-13.0.2-old/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2017-01-02 17:53:59.956322926 +0100
++++ mesa-13.0.2/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c	2017-01-02 17:54:07.975096752 +0100
 @@ -291,6 +291,7 @@
      case CHIP_BONAIRE:
      case CHIP_KAVERI:
@@ -87,7 +167,7 @@ diff -ur mesa-11.1.0-orig/src/gallium/winsys/radeon/drm/radeon_drm_winsys.c mesa
      case CHIP_HAWAII:
      case CHIP_MULLINS:
          ws->info.chip_class = CIK;
-@@ -438,6 +439,7 @@
+@@ -489,6 +490,7 @@
          case CHIP_TAHITI:
          case CHIP_PITCAIRN:
          case CHIP_BONAIRE:
