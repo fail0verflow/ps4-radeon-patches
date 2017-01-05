@@ -1,0 +1,93 @@
+From 7b1f524b40c1ec014265f49646d10ef8cd52659d Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 20 Oct 2015 11:52:08 -0400
+Subject: [PATCH 030/117] amdgpu: SVM test v2
+
+SWDEV-75927: Coarse Grain SVM support for OpenCL 2.0 Add SVM relevant test.
+
+v2:
+Update the description of this commit.
+Fix an issue that the SVM feature should not be tested when SVM range is not supported.
+Remove test for query function for general VM range.
+
+Change-Id: I21fad07611d88280ffa1375ecf1de95c305cac22
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ tests/amdgpu/basic_tests.c | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index 56db935..eb73578 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -49,6 +49,7 @@ static void amdgpu_command_submission_sdma(void);
+ static void amdgpu_command_submission_multi_fence(void);
+ static void amdgpu_userptr_test(void);
+ static void amdgpu_semaphore_test(void);
++static void amdgpu_svm_test(void);
+ 
+ CU_TestInfo basic_tests[] = {
+ 	{ "Query Info Test",  amdgpu_query_info_test },
+@@ -59,9 +60,11 @@ CU_TestInfo basic_tests[] = {
+ 	{ "Command submission Test (SDMA)", amdgpu_command_submission_sdma },
+ 	{ "Command submission Test (Multi-fence)", amdgpu_command_submission_multi_fence },
+ 	{ "SW semaphore Test",  amdgpu_semaphore_test },
++	{ "SVM Test", amdgpu_svm_test },
+ 	CU_TEST_INFO_NULL,
+ };
+ #define BUFFER_SIZE (8 * 1024)
++#define SVM_TEST_COUNT 16
+ #define SDMA_PKT_HEADER_op_offset 0
+ #define SDMA_PKT_HEADER_op_mask   0x000000FF
+ #define SDMA_PKT_HEADER_op_shift  0
+@@ -1077,3 +1080,46 @@ static void amdgpu_userptr_test(void)
+ 	r = amdgpu_cs_ctx_free(context_handle);
+ 	CU_ASSERT_EQUAL(r, 0);
+ }
++
++static void amdgpu_svm_test(void)
++{
++	int r;
++	uint64_t svm_mc;
++	amdgpu_va_handle va_handle[SVM_TEST_COUNT];
++	void *cpu;
++	uint64_t start;
++	uint64_t end;
++	int i;
++
++	r = amdgpu_va_range_query(device_handle,
++		amdgpu_gpu_va_range_svm, &start, &end);
++	CU_ASSERT_EQUAL(r, 0);
++
++	/* If there is no SVM range, exit this function.*/
++	if (start == 0ULL && end == 0ULL)
++		return;
++
++	CU_ASSERT(start < end);
++	CU_ASSERT(end - start >= 1ULL * 1024ULL * 1024ULL * 1024ULL);
++
++	for (i = 0; i < SVM_TEST_COUNT; i++) {
++		r = amdgpu_va_range_alloc(device_handle,
++					  amdgpu_gpu_va_range_svm,
++					  64 * 1024 * 1024, 1, 0, &svm_mc,
++					  &va_handle[i], 0);
++		CU_ASSERT_EQUAL(r, 0);
++
++		r = amdgpu_svm_commit(va_handle[i], &cpu);
++		CU_ASSERT_EQUAL(r, 0);
++		CU_ASSERT_PTR_NOT_NULL(cpu);
++		CU_ASSERT_EQUAL(svm_mc, (uint64_t)cpu);
++	}
++
++	for (i = 0; i < SVM_TEST_COUNT; i++) {
++		r = amdgpu_svm_uncommit(va_handle[i]);
++		CU_ASSERT_EQUAL(r, 0);
++
++		r = amdgpu_va_range_free(va_handle[i]);
++		CU_ASSERT_EQUAL(r, 0);
++	}
++}
+-- 
+2.7.4
+

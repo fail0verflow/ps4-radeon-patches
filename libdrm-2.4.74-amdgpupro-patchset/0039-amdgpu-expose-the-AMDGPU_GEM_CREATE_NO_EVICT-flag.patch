@@ -1,0 +1,30 @@
+From 3fb478b00e1f3123f4c9b1efbd4a7e804679b64b Mon Sep 17 00:00:00 2001
+From: Jammy Zhou <Jammy.Zhou@amd.com>
+Date: Mon, 9 Nov 2015 12:42:52 +0800
+Subject: [PATCH 039/117] amdgpu: expose the AMDGPU_GEM_CREATE_NO_EVICT flag
+
+With this flag specified, the buffer will be pinned at allocation time.
+
+Change-Id: Ibb75f27dc79ca678e58590b188a749b762429fce
+Signed-off-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Chunming Zhou <david1.zhou@amd.com>
+---
+ include/drm/amdgpu_drm.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index f97acd1..1df0d9c 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -75,6 +75,8 @@
+ #define AMDGPU_GEM_CREATE_CPU_GTT_USWC		(1 << 2)
+ /* Flag that the memory should be in VRAM and cleared */
+ #define AMDGPU_GEM_CREATE_VRAM_CLEARED		(1 << 3)
++/* Flag that the memory allocation should be pinned */
++#define AMDGPU_GEM_CREATE_NO_EVICT              (1 << 3)
+ 
+ struct drm_amdgpu_gem_create_in  {
+ 	/** the requested memory size */
+-- 
+2.7.4
+

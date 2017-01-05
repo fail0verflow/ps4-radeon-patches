@@ -1,0 +1,57 @@
+From 56d1958975665c03e3b291e941402df9891d6a95 Mon Sep 17 00:00:00 2001
+From: jqdeng <Emily.Deng@amd.com>
+Date: Tue, 5 Jul 2016 15:46:37 +0800
+Subject: [PATCH 077/117] amdgpu: Make amdgpu_get_auth to non-static
+
+The amdgpu_get_auth will be used by another two functions amdgpu_get_fb_id
+and amdgpu_get_bo_from_fb_id, so make it to non-static, and
+add definition to amdgpu_internal.h.
+
+Signed-off-by: jqdeng <Emily.Deng@amd.com>
+Reviewed-by: Chunming Zhou <David1.Zhou@amd.com>
+---
+ amdgpu/amdgpu_device.c   |  2 +-
+ amdgpu/amdgpu_internal.h | 14 ++++++++++++++
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index 8f1f781..e9ea39c 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -113,7 +113,7 @@ static int fd_compare(void *key1, void *key2)
+ *          >0 - AMD specific error code\n
+ *          <0 - Negative POSIX Error code
+ */
+-static int amdgpu_get_auth(int fd, int *auth)
++int amdgpu_get_auth(int fd, int *auth)
+ {
+ 	int r = 0;
+ 	drm_client_t client = {};
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index 1160a12..f722ab5 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -159,6 +159,20 @@ drm_private int amdgpu_query_gpu_info_init(amdgpu_device_handle dev);
+ drm_private uint64_t amdgpu_cs_calculate_timeout(uint64_t timeout);
+ 
+ /**
++* Get the authenticated form fd,
++*
++* \param   fd   - \c [in]  File descriptor for AMD GPU device
++* \param   auth - \c [out] Pointer to output the fd is authenticated or not
++*                          A render node fd, output auth = 0
++*                          A legacy fd, get the authenticated for compatibility root
++*
++* \return   0 on success\n
++*          >0 - AMD specific error code\n
++*          <0 - Negative POSIX Error code
++*/
++int amdgpu_get_auth(int fd, int *auth);
++
++/**
+  * Inline functions.
+  */
+ 
+-- 
+2.7.4
+

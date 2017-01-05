@@ -1,0 +1,38 @@
+From e32955cf3b88b111e8d80a0c45e6e6d284d7d9a2 Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 3 Nov 2015 15:26:09 -0500
+Subject: [PATCH 034/117] amdgpu: Free/uninit vamgr_32 in theoretically correct
+ order
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+vamgr_32 is a region inside general VAM range. It is better to free and deinitialize it before general VAM range.
+
+Change-Id: Iaafaf5c1be7f274e933f1295a8822d90c1c6200d
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu_device.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index eb71c44..a58a9d4 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -131,10 +131,10 @@ static int amdgpu_get_auth(int fd, int *auth)
+ static void amdgpu_device_free_internal(amdgpu_device_handle dev)
+ {
+ 	amdgpu_svm_vamgr_deinit(dev);
+-	amdgpu_vamgr_deinit(dev->vamgr);
+-	free(dev->vamgr);
+ 	amdgpu_vamgr_deinit(dev->vamgr_32);
+ 	free(dev->vamgr_32);
++	amdgpu_vamgr_deinit(dev->vamgr);
++	free(dev->vamgr);
+ 	util_hash_table_destroy(dev->bo_flink_names);
+ 	util_hash_table_destroy(dev->bo_handles);
+ 	pthread_mutex_destroy(&dev->bo_table_mutex);
+-- 
+2.7.4
+

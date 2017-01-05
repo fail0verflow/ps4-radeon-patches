@@ -1,0 +1,42 @@
+From 813fc7d4532d77b0fc46c0f80813fb63c86e8097 Mon Sep 17 00:00:00 2001
+From: jimqu <Jim.Qu@amd.com>
+Date: Mon, 16 Nov 2015 15:13:00 +0800
+Subject: [PATCH 040/117] amdgpu: add query amdgpu capability defination
+
+Signed-off-by: JimQu <Jim.Qu@amd.com>
+
+Reviewed-by: Chunming Zhou <david1.zhou@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+
+Change-Id: Id615b06a59bc5a49aa8f7c7e658eb1bb1f318bd6
+---
+ include/drm/amdgpu_drm.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 1df0d9c..981b346 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -508,6 +508,8 @@ struct drm_amdgpu_cs_chunk_data {
+ #define AMDGPU_INFO_VIS_VRAM_USAGE		0x17
+ /* virtual range */
+ #define AMDGPU_INFO_VIRTUAL_RANGE		0x18
++/* gpu capability */
++#define AMDGPU_INFO_CAPABILITY			0x50
+ 
+ #define AMDGPU_INFO_MMR_SE_INDEX_SHIFT	0
+ #define AMDGPU_INFO_MMR_SE_INDEX_MASK	0xff
+@@ -569,6 +571,10 @@ struct drm_amdgpu_info {
+ 			uint32_t aperture;
+ 			uint32_t _pad;
+ 		} virtual_range;
++
++		struct {
++			uint64_t type;
++		} query_capability;
+ 	};
+ };
+ 
+-- 
+2.7.4
+

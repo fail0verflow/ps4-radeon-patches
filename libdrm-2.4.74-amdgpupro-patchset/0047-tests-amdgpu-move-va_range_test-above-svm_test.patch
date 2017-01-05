@@ -1,0 +1,32 @@
+From c7c7f25b214b694541d69bc3fb1a096a1725d6fb Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Fri, 5 Feb 2016 13:20:27 +0800
+Subject: [PATCH 047/117] tests/amdgpu: move va_range_test above svm_test
+
+svm_test won't release va range at exit. va_range_test would fail as the
+desired range is occupied.
+
+Change-Id: I36bb3c23f185baa26a383e02a87a0b02f613e2d0
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+---
+ tests/amdgpu/basic_tests.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index 78388a9..b7e6270 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -62,9 +62,9 @@ CU_TestInfo basic_tests[] = {
+ 	{ "Command submission Test (SDMA)", amdgpu_command_submission_sdma },
+ 	{ "Command submission Test (Multi-fence)", amdgpu_command_submission_multi_fence },
+ 	{ "SW semaphore Test",  amdgpu_semaphore_test },
++	{ "VA range Test", amdgpu_va_range_test},
+ 	{ "SVM Test", amdgpu_svm_test },
+ 	{ "SVM Test (multi-GPUs)", amdgpu_multi_svm_test },
+-	{ "VA range Test", amdgpu_va_range_test},
+ 	CU_TEST_INFO_NULL,
+ };
+ #define BUFFER_SIZE (8 * 1024)
+-- 
+2.7.4
+

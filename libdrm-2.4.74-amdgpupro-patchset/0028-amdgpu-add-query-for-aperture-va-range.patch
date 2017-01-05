@@ -1,0 +1,151 @@
+From 6699587911b702ad612ad0e942214186ca04c1c2 Mon Sep 17 00:00:00 2001
+From: Flora Cui <flora.cui@amd.com>
+Date: Sat, 10 Oct 2015 17:25:06 +0800
+Subject: [PATCH 028/117] amdgpu: add query for aperture va range
+
+Change-Id: I4358cdd7cd86f172967e063eac13708941c4e566
+Signed-off-by: Flora Cui <flora.cui@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ amdgpu/amdgpu.h          | 30 ++++++++++++++++++++++++++++++
+ amdgpu/amdgpu_gpu_info.c | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ include/drm/amdgpu_drm.h | 16 ++++++++++++++++
+ 3 files changed, 91 insertions(+)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 8822a0c..ccb4971 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -1081,6 +1081,36 @@ int amdgpu_query_gds_info(amdgpu_device_handle dev,
+ 			struct amdgpu_gds_resource_info *gds_info);
+ 
+ /**
++* Query private aperture range
++*
++* \param dev    - [in] Device handle. See #amdgpu_device_initialize()
++* \param start - \c [out] Start of private aperture
++* \param end    - \c [out] End of private aperture
++*
++* \return  0 on success\n
++*         <0 - Negative POSIX Error code
++*
++*/
++int amdgpu_query_private_aperture(amdgpu_device_handle dev,
++			uint64_t *start,
++			uint64_t *end);
++
++/**
++* Query shared aperture range
++*
++* \param dev    - [in] Device handle. See #amdgpu_device_initialize()
++* \param start - \c [out] Start of shared aperture
++* \param end    - \c [out] End of shared aperture
++*
++* \return 0 on success\n
++*    <0 - Negative POSIX Error code
++*
++*/
++int amdgpu_query_shared_aperture(amdgpu_device_handle dev,
++			uint64_t *start,
++			uint64_t *end);
++
++/**
+  * Read a set of consecutive memory-mapped registers.
+  * Not all registers are allowed to be read by userspace.
+  *
+diff --git a/amdgpu/amdgpu_gpu_info.c b/amdgpu/amdgpu_gpu_info.c
+index 0cc17f1..73d8d11 100644
+--- a/amdgpu/amdgpu_gpu_info.c
++++ b/amdgpu/amdgpu_gpu_info.c
+@@ -308,3 +308,48 @@ int amdgpu_query_gds_info(amdgpu_device_handle dev,
+ 
+ 	return 0;
+ }
++
++static int amdgpu_query_virtual_range_info(amdgpu_device_handle dev,
++			uint32_t aperture,
++			uint64_t *start,
++			uint64_t *end)
++{
++	struct drm_amdgpu_virtual_range range_info;
++	struct drm_amdgpu_info request;
++	int r;
++
++	memset(&range_info, 0, sizeof(range_info));
++	request.return_pointer = (uintptr_t)&range_info;
++	request.return_size = sizeof(range_info);
++	request.query = AMDGPU_INFO_VIRTUAL_RANGE;
++	request.virtual_range.aperture = aperture;
++
++	r = drmCommandWrite(dev->fd, DRM_AMDGPU_INFO, &request,
++			    sizeof(struct drm_amdgpu_info));
++	if (r)
++		return r;
++
++	*start = range_info.start;
++	*end = range_info.end;
++	return 0;
++}
++
++int amdgpu_query_private_aperture(amdgpu_device_handle dev,
++			uint64_t *start,
++			uint64_t *end)
++{
++	return amdgpu_query_virtual_range_info(dev,
++			AMDGPU_SUA_APERTURE_PRIVATE,
++			start,
++			end);
++}
++
++int amdgpu_query_shared_aperture(amdgpu_device_handle dev,
++			uint64_t *start,
++			uint64_t *end)
++{
++	return amdgpu_query_virtual_range_info(dev,
++			AMDGPU_SUA_APERTURE_SHARED,
++			start,
++			end);
++}
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 2cbea72..f97acd1 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -504,6 +504,8 @@ struct drm_amdgpu_cs_chunk_data {
+ #define AMDGPU_INFO_DEV_INFO			0x16
+ /* visible vram usage */
+ #define AMDGPU_INFO_VIS_VRAM_USAGE		0x17
++/* virtual range */
++#define AMDGPU_INFO_VIRTUAL_RANGE		0x18
+ 
+ #define AMDGPU_INFO_MMR_SE_INDEX_SHIFT	0
+ #define AMDGPU_INFO_MMR_SE_INDEX_MASK	0xff
+@@ -560,6 +562,11 @@ struct drm_amdgpu_info {
+ 		} read_mmr_reg;
+ 
+ 		struct drm_amdgpu_query_fw query_fw;
++
++		struct {
++			uint32_t aperture;
++			uint32_t _pad;
++		} virtual_range;
+ 	};
+ };
+ 
+@@ -669,4 +676,13 @@ struct drm_amdgpu_info_hw_ip {
+ #define AMDGPU_FAMILY_VI			130 /* Iceland, Tonga */
+ #define AMDGPU_FAMILY_CZ			135 /* Carrizo */
+ 
++/**
++ *  Definition of System Unified Address (SUA) apertures
++ */
++#define AMDGPU_SUA_APERTURE_PRIVATE	1
++#define AMDGPU_SUA_APERTURE_SHARED	2
++struct drm_amdgpu_virtual_range {
++	uint64_t start;
++	uint64_t end;
++};
+ #endif
+-- 
+2.7.4
+

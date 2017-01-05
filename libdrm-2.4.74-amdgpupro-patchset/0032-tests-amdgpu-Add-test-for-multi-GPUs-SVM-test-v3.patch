@@ -1,0 +1,335 @@
+From ce7de7e34c1a87d56bcc7a8ebeac1a25756c5991 Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Fri, 30 Oct 2015 12:04:07 -0400
+Subject: [PATCH 032/117] tests/amdgpu: Add test for multi GPUs SVM test v3
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+1. We try to open all GPUs when test starts.
+2. Test multi GPUs for SVM
+3. Add verbose output option and facility into this unit test app.
+
+v2:
+1. Adjust title
+2. Use drmGetDevices to get the number of cards available.
+3. Add warning output option and facility into this unit test app.
+4. Adjust a comment and delete useless C statement when open function call fails.
+5. Add two informative outputs in single SVM test.
+
+v3:
+1. Use general device name from drmGetDevices instead of fixed name.
+2. open devices in a single "for" statement.
+3. Create a function to close all devices.
+
+Change-Id: I313c13eabd6f0c2d3107ba37413e8ebd871faa0e
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Acked-by: Christian König <christian.koenig@amd.com>
+---
+ tests/amdgpu/amdgpu_test.c | 92 +++++++++++++++++++++++++++++++++++++++-------
+ tests/amdgpu/amdgpu_test.h |  5 +++
+ tests/amdgpu/basic_tests.c | 71 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 154 insertions(+), 14 deletions(-)
+
+diff --git a/tests/amdgpu/amdgpu_test.c b/tests/amdgpu/amdgpu_test.c
+index 71f357c..1e71fbf 100644
+--- a/tests/amdgpu/amdgpu_test.c
++++ b/tests/amdgpu/amdgpu_test.c
+@@ -56,6 +56,10 @@
+  */
+ int drm_amdgpu[MAX_CARDS_SUPPORTED];
+ 
++static int num_devices;
++static bool verbose = false;
++static bool warning = false;
++
+ /** The table of all known test suites to run */
+ static CU_SuiteInfo suites[] = {
+ 	{
+@@ -106,14 +110,24 @@ static void display_test_suites(void)
+ 	}
+ }
+ 
++static void amdgpu_close_all()
++{
++	int i;
++	for (i = 0; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0)
++			close(drm_amdgpu[i]);
++}
+ 
+ /** Help string for command line parameters */
+-static const char usage[] = "Usage: %s [-hl] [<-s <suite id>> [-t <test id>]]\n"
++static const char usage[] =
++				"Usage: %s [-hlvw] [<-s <suite id>> [-t <test id>]]\n"
+ 				"where:\n"
+ 				"       l - Display all suites and their tests\n"
++				"       v - Verbose output\n"
++				"       w - Output warning message\n"
+ 				"       h - Display this help\n";
+ /** Specified options strings for getopt */
+-static const char options[]   = "hls:t:";
++static const char options[]   = "hlvws:t:";
+ 
+ /* The main() function for setting up and running the tests.
+  * Returns a CUE_SUCCESS on successful running, another
+@@ -127,8 +141,10 @@ int main(int argc, char **argv)
+ 	int test_id  = -1;	/* By default run all tests in the suite */
+ 	CU_pSuite pSuite = NULL;
+ 	CU_pTest  pTest  = NULL;
++	drmDevicePtr devices[MAX_CARDS_SUPPORTED];
+ 
+ 	int aval = drmAvailable();
++	char card_name[256];
+ 
+ 	if (aval == 0) {
+ 		fprintf(stderr, "DRM driver is not available\n");
+@@ -153,6 +169,12 @@ int main(int argc, char **argv)
+ 		case 't':
+ 			test_id = atoi(optarg);
+ 			break;
++		case 'v':
++			verbose = true;
++			break;
++		case 'w':
++			warning = true;
++			break;
+ 		case '?':
+ 		case 'h':
+ 			fprintf(stderr, usage, argv[0]);
+@@ -163,17 +185,31 @@ int main(int argc, char **argv)
+ 		}
+ 	}
+ 
+-	/* Try to open all possible radeon connections
+-	 * Right now: Open only the 0.
++	/* Try to open all possible amdgpu connections
+ 	 */
+-	printf("Try to open the card 0..\n");
+-	drm_amdgpu[0] = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+-
+-	if (drm_amdgpu[0] < 0) {
+-		perror("Cannot open /dev/dri/card0\n");
++	num_devices = drmGetDevices(devices, MAX_CARDS_SUPPORTED);
++	amdgpu_vprintf("\n Number of DRI devices is %d\n", num_devices);
++	if (num_devices > MAX_CARDS_SUPPORTED)
++		num_devices = MAX_CARDS_SUPPORTED;
++	if (num_devices <= 0) {
++		perror("Cannot query number of DRI devices.\n");
+ 		exit(EXIT_FAILURE);
+ 	}
+ 
++	for (i = 0; i < num_devices; i++) {
++		amdgpu_vprintf("Try to open %s..\n",
++			devices[i]->nodes[DRM_NODE_PRIMARY]);
++		drm_amdgpu[i] = open(devices[i]->nodes[DRM_NODE_PRIMARY],
++			O_RDWR | O_CLOEXEC);
++		if (i == 0 && drm_amdgpu[i] < 0) {
++			drmFreeDevices(devices, num_devices);
++			/* It is essential to open first connection to run any test. */
++			perror("Cannot open first card.\n");
++			exit(EXIT_FAILURE);
++		}
++	}
++	drmFreeDevices(devices, num_devices);
++
+ 	/** Display version of DRM driver */
+ 	drmVersionPtr retval = drmGetVersion(drm_amdgpu[0]);
+ 
+@@ -191,7 +227,7 @@ int main(int argc, char **argv)
+ 
+ 	/* initialize the CUnit test registry */
+ 	if (CUE_SUCCESS != CU_initialize_registry()) {
+-		close(drm_amdgpu[0]);
++		amdgpu_close_all();
+ 		return CU_get_error();
+ 	}
+ 
+@@ -200,7 +236,7 @@ int main(int argc, char **argv)
+ 		fprintf(stderr, "suite registration failed - %s\n",
+ 				CU_get_error_msg());
+ 		CU_cleanup_registry();
+-		close(drm_amdgpu[0]);
++		amdgpu_close_all();
+ 		exit(EXIT_FAILURE);
+ 	}
+ 
+@@ -222,7 +258,7 @@ int main(int argc, char **argv)
+ 					fprintf(stderr, "Invalid test id: %d\n",
+ 								test_id);
+ 					CU_cleanup_registry();
+-					close(drm_amdgpu[0]);
++					amdgpu_close_all();
+ 					exit(EXIT_FAILURE);
+ 				}
+ 			} else
+@@ -231,13 +267,41 @@ int main(int argc, char **argv)
+ 			fprintf(stderr, "Invalid suite id : %d\n",
+ 					suite_id);
+ 			CU_cleanup_registry();
+-			close(drm_amdgpu[0]);
++			amdgpu_close_all();
+ 			exit(EXIT_FAILURE);
+ 		}
+ 	} else
+ 		CU_basic_run_tests();
+ 
+ 	CU_cleanup_registry();
+-	close(drm_amdgpu[0]);
++	amdgpu_close_all();
++
+ 	return CU_get_error();
+ }
++
++void amdgpu_vprintf(char *fmt, ...)
++{
++	va_list args;
++	if (verbose) {
++	    va_start(args, fmt);
++	    vprintf(fmt, args);
++	    va_end(args);
++	}
++}
++
++void amdgpu_warning(bool condition, char *fmt, ...)
++{
++	if (warning && condition)
++	{
++		printf ("WARNING: ");
++		va_list args;
++		va_start(args, fmt);
++		vprintf(fmt, args);
++		va_end(args);
++	}
++}
++
++int amdgpu_num_devices()
++{
++	return num_devices;
++}
+diff --git a/tests/amdgpu/amdgpu_test.h b/tests/amdgpu/amdgpu_test.h
+index fca92ad..5c47ba3 100644
+--- a/tests/amdgpu/amdgpu_test.h
++++ b/tests/amdgpu/amdgpu_test.h
+@@ -104,6 +104,11 @@ extern CU_TestInfo vce_tests[];
+ /**
+  * Helper functions
+  */
++
++void amdgpu_vprintf(char *fmt, ...);
++void amdgpu_warning(bool condition, char *fmt, ...);
++int amdgpu_num_devices();
++
+ static inline amdgpu_bo_handle gpu_mem_alloc(
+ 					amdgpu_device_handle device_handle,
+ 					uint64_t size,
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index eb73578..23178e0 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -50,6 +50,7 @@ static void amdgpu_command_submission_multi_fence(void);
+ static void amdgpu_userptr_test(void);
+ static void amdgpu_semaphore_test(void);
+ static void amdgpu_svm_test(void);
++static void amdgpu_multi_svm_test(void);
+ 
+ CU_TestInfo basic_tests[] = {
+ 	{ "Query Info Test",  amdgpu_query_info_test },
+@@ -61,6 +62,7 @@ CU_TestInfo basic_tests[] = {
+ 	{ "Command submission Test (Multi-fence)", amdgpu_command_submission_multi_fence },
+ 	{ "SW semaphore Test",  amdgpu_semaphore_test },
+ 	{ "SVM Test", amdgpu_svm_test },
++	{ "SVM Test (multi-GPUs)", amdgpu_multi_svm_test },
+ 	CU_TEST_INFO_NULL,
+ };
+ #define BUFFER_SIZE (8 * 1024)
+@@ -1094,6 +1096,8 @@ static void amdgpu_svm_test(void)
+ 	r = amdgpu_va_range_query(device_handle,
+ 		amdgpu_gpu_va_range_svm, &start, &end);
+ 	CU_ASSERT_EQUAL(r, 0);
++	amdgpu_vprintf("\n");
++	amdgpu_vprintf("SVM range is from 0x%llx to 0x%llx.\n", start, end);
+ 
+ 	/* If there is no SVM range, exit this function.*/
+ 	if (start == 0ULL && end == 0ULL)
+@@ -1108,6 +1112,7 @@ static void amdgpu_svm_test(void)
+ 					  64 * 1024 * 1024, 1, 0, &svm_mc,
+ 					  &va_handle[i], 0);
+ 		CU_ASSERT_EQUAL(r, 0);
++		amdgpu_vprintf("Allocate SVM MC 0x%llx.\n", svm_mc);
+ 
+ 		r = amdgpu_svm_commit(va_handle[i], &cpu);
+ 		CU_ASSERT_EQUAL(r, 0);
+@@ -1123,3 +1128,69 @@ static void amdgpu_svm_test(void)
+ 		CU_ASSERT_EQUAL(r, 0);
+ 	}
+ }
++
++static void amdgpu_multi_svm_test(void)
++{
++	int r;
++	int i;
++	uint64_t svm_mcs[MAX_CARDS_SUPPORTED];
++	amdgpu_va_handle va_handles[MAX_CARDS_SUPPORTED];
++	amdgpu_device_handle device_handles[MAX_CARDS_SUPPORTED];
++	uint32_t major_version;
++	uint32_t minor_version;
++	int num_devices;
++
++	device_handles[0] = device_handle;
++	num_devices = amdgpu_num_devices();
++
++	for (i = 1; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0) {
++			r = amdgpu_device_initialize(drm_amdgpu[i], &major_version,
++					&minor_version, &device_handles[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++
++	amdgpu_vprintf("\n");
++	amdgpu_vprintf("    Testing to alloc and free SVM in all GPUs.\n");
++	amdgpu_vprintf("    The svm_mcs generally are same.\n");
++	for (i = 0; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0) {
++			r = amdgpu_va_range_alloc(device_handles[i],
++						  amdgpu_gpu_va_range_svm,
++						  0x1000000, 1, 0, &svm_mcs[i],
++						  &va_handles[i], 0);
++			CU_ASSERT_EQUAL(r, 0);
++			amdgpu_vprintf("        card %d, svm_mc 0x%llx\n", i, svm_mcs[i]);
++			amdgpu_warning(svm_mcs[i] != svm_mcs[0],
++				"The SVM from different GPUs should be able to be allocated"
++				" from same location.");
++			r = amdgpu_va_range_free(va_handles[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++
++	amdgpu_vprintf("    Testing to alloc SVM in all GPUs.\n");
++	amdgpu_vprintf("    The svm_mcs are generally different by 0x1000000\n");
++	for (i = 0; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0) {
++			r = amdgpu_va_range_alloc(device_handles[i],
++						  amdgpu_gpu_va_range_svm,
++						  0x1000000, 1, 0, &svm_mcs[i],
++						  &va_handles[i], 0);
++			CU_ASSERT_EQUAL(r, 0);
++			amdgpu_vprintf("        card %d, svm_mc 0x%llx\n", i, svm_mcs[i]);
++			amdgpu_warning(svm_mcs[i] - svm_mcs[0] != 0x1000000 * i,
++				"The SVM from GPUs should be allocated sequentially.");
++		}
++
++	for (i = 0; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0) {
++			r = amdgpu_va_range_free(va_handles[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++
++	for (i = 1; i < num_devices; i++)
++		if (drm_amdgpu[i] > 0) {
++			r = amdgpu_device_deinitialize(device_handles[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++}
+-- 
+2.7.4
+

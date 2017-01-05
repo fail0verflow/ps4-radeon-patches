@@ -1,0 +1,305 @@
+From f34f4232b7a2dad9bb1aaaa68f77ed5a5fa76456 Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 20 Oct 2015 11:47:14 -0400
+Subject: [PATCH 029/117] amdgpu: Implement SVM v2
+
+SWDEV-75927: Coarse Grain SVM support for OpenCL 2.0
+Add SVM API.
+Implement SVM to reserve CPU and GPU VM address space for SVM. Implement commit/uncommit function for SVM.
+
+v2:
+Merge patch1 and patch2.
+Update description of the commit.
+Address review comments on coding style.
+Update comments in source code.
+Fix one issue in function amdgpu_va_range_query. The start of the range should be dev->vamgr_svm->va_min.
+Fix an error code.
+
+Change-Id: Ib804b075347646ee6c4b4159583f1b4a0325df08
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ amdgpu/amdgpu.h          |  28 ++++++++-
+ amdgpu/amdgpu_device.c   |   3 +
+ amdgpu/amdgpu_internal.h |   6 ++
+ amdgpu/amdgpu_vamgr.c    | 145 ++++++++++++++++++++++++++++++++++++++++++++++-
+ 4 files changed, 178 insertions(+), 4 deletions(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index ccb4971..79314fb 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -87,7 +87,9 @@ enum amdgpu_bo_handle_type {
+ enum amdgpu_gpu_va_range
+ {
+ 	/** Allocate from "normal"/general range */
+-	amdgpu_gpu_va_range_general = 0
++	amdgpu_gpu_va_range_general = 0,
++	/** Allocate from svm range */
++	amdgpu_gpu_va_range_svm = 1
+ };
+ 
+ /*--------------------------------------------------------------------------*/
+@@ -1238,6 +1240,30 @@ int amdgpu_bo_va_op(amdgpu_bo_handle bo,
+ 		    uint32_t ops);
+ 
+ /**
++ *  Commit SVM allocation in a process
++ *
++ * \param va_range_handle - \c [in] Handle of SVM allocation
++ * \param cpu - \c [out] CPU pointer. The value is equal to GPU VM address.
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++*/
++int amdgpu_svm_commit(amdgpu_va_handle va_range_handle,
++			void **cpu);
++
++/**
++ *  Uncommit SVM alloation in process's CPU_VM
++ *
++ * \param va_range_handle - \c [in] Handle of SVM allocation
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++*/
++int amdgpu_svm_uncommit(amdgpu_va_handle va_range_handle);
++
++/**
+  *  create semaphore
+  *
+  * \param   sem	   - \c [out] semaphore handle
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index e5a923e..eb71c44 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -130,6 +130,7 @@ static int amdgpu_get_auth(int fd, int *auth)
+ 
+ static void amdgpu_device_free_internal(amdgpu_device_handle dev)
+ {
++	amdgpu_svm_vamgr_deinit(dev);
+ 	amdgpu_vamgr_deinit(dev->vamgr);
+ 	free(dev->vamgr);
+ 	amdgpu_vamgr_deinit(dev->vamgr_32);
+@@ -275,6 +276,8 @@ int amdgpu_device_initialize(int fd,
+ 	amdgpu_vamgr_init(dev->vamgr_32, start, max,
+ 			  dev->dev_info.virtual_address_alignment);
+ 
++	amdgpu_svm_vamgr_init(dev);
++
+ 	*major_version = dev->major_version;
+ 	*minor_version = dev->minor_version;
+ 	*device_handle = dev;
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index 557ba1f..3ae92d9 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -54,6 +54,7 @@ struct amdgpu_bo_va_hole {
+ struct amdgpu_bo_va_mgr {
+ 	/* the start virtual address */
+ 	uint64_t va_offset;
++	uint64_t va_min;
+ 	uint64_t va_max;
+ 	struct list_head va_holes;
+ 	pthread_mutex_t bo_va_mutex;
+@@ -87,6 +88,8 @@ struct amdgpu_device {
+ 	struct amdgpu_bo_va_mgr *vamgr;
+ 	/** The VA manager for the 32bit address space */
+ 	struct amdgpu_bo_va_mgr *vamgr_32;
++	/** The VA manager for SVM address space */
++	struct amdgpu_bo_va_mgr *vamgr_svm;
+ };
+ 
+ struct amdgpu_bo {
+@@ -148,6 +151,9 @@ amdgpu_vamgr_find_va(struct amdgpu_bo_va_mgr *mgr, uint64_t size,
+ drm_private void
+ amdgpu_vamgr_free_va(struct amdgpu_bo_va_mgr *mgr, uint64_t va, uint64_t size);
+ 
++int amdgpu_svm_vamgr_init(struct amdgpu_device *dev);
++void amdgpu_svm_vamgr_deinit(struct amdgpu_device *dev);
++
+ drm_private int amdgpu_query_gpu_info_init(amdgpu_device_handle dev);
+ 
+ drm_private uint64_t amdgpu_cs_calculate_timeout(uint64_t timeout);
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index 8a707cb..f664216 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -36,18 +36,30 @@
+ int amdgpu_va_range_query(amdgpu_device_handle dev,
+ 			  enum amdgpu_gpu_va_range type, uint64_t *start, uint64_t *end)
+ {
+-	if (type == amdgpu_gpu_va_range_general) {
++	switch (type) {
++	case amdgpu_gpu_va_range_general:
+ 		*start = dev->dev_info.virtual_address_offset;
+ 		*end = dev->dev_info.virtual_address_max;
+ 		return 0;
++	case amdgpu_gpu_va_range_svm:
++		if (dev->vamgr_svm) {
++			*start = dev->vamgr_svm->va_min;
++			*end = dev->vamgr_svm->va_max;
++		} else {
++			*start = 0ULL;
++			*end = 0ULL;
++		}
++		return 0;
++	default:
++		return -EINVAL;
+ 	}
+-	return -EINVAL;
+ }
+ 
+ drm_private void amdgpu_vamgr_init(struct amdgpu_bo_va_mgr *mgr, uint64_t start,
+ 			      uint64_t max, uint64_t alignment)
+ {
+ 	mgr->va_offset = start;
++	mgr->va_min = start;
+ 	mgr->va_max = max;
+ 	mgr->va_alignment = alignment;
+ 
+@@ -235,7 +247,12 @@ int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+ {
+ 	struct amdgpu_bo_va_mgr *vamgr;
+ 
+-	if (flags & AMDGPU_VA_RANGE_32_BIT)
++	if (amdgpu_gpu_va_range_svm == va_range_type) {
++		vamgr = dev->vamgr_svm;
++		if (!vamgr)
++			return -EINVAL;
++	}
++	else if (flags & AMDGPU_VA_RANGE_32_BIT)
+ 		vamgr = dev->vamgr_32;
+ 	else
+ 		vamgr = dev->vamgr;
+@@ -285,3 +302,125 @@ int amdgpu_va_range_free(amdgpu_va_handle va_range_handle)
+ 	free(va_range_handle);
+ 	return 0;
+ }
++
++/**
++ *  Initialize SVM VAM manager.
++ *  When this function return error, future SVM allocation will fail.
++ *  Caller may ignore the error code returned by this function.
++ *
++ * \param   dev - \c [in] amdgpu_device pointer
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++ */
++int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
++{
++	uint64_t start;
++	uint64_t end;
++	/* size of SVM range */
++	uint64_t size;
++	uint64_t base_required;
++	/* Size of step when looking for SVM range. */
++	uint64_t step;
++	/*Will not search less than this address. */
++	uint64_t min_base_required;
++	void * cpu_address;
++	/* return value of this function. */
++	int ret;
++
++	ret = amdgpu_va_range_query(dev, amdgpu_gpu_va_range_general, &start, &end);
++	if (ret)
++		return ret;
++
++	/* size of the general VM */
++	size = end - start;
++	/* size of SVM range */
++	size = size / 4;
++	/* at least keep lower 4G for process usage in CPU address space*/
++	min_base_required = 4ULL * 1024ULL * 1024ULL * 1024ULL;
++	step = size / 8;
++
++	ret = -ENOSPC;
++	/* We try to find a hole both in CPU/GPU VM address space for SVM from top
++	 * to bottom.
++	 */
++	for (base_required = end - size; base_required >= min_base_required;
++		base_required -= step) {
++		start = amdgpu_vamgr_find_va(dev->vamgr, size,
++						dev->dev_info.virtual_address_alignment, base_required);
++		if (start != base_required)
++			continue;
++
++		/* Try to map the SVM range in CPU VM */
++		cpu_address = mmap((void *)start, size, PROT_NONE,
++					MAP_PRIVATE | MAP_NORESERVE | MAP_ANONYMOUS, -1, 0);
++		if (cpu_address == (void *)start) {
++			dev->vamgr_svm = calloc(1, sizeof(struct amdgpu_bo_va_mgr));
++			if (dev->vamgr_svm == NULL) {
++				amdgpu_vamgr_free_va(dev->vamgr, start, size);
++				munmap(cpu_address, size);
++				ret = -ENOMEM;
++			} else {
++				amdgpu_vamgr_init(dev->vamgr_svm, start, start + size,
++						  dev->dev_info.virtual_address_alignment);
++				ret = 0;
++			}
++			break;
++		} else if (cpu_address == MAP_FAILED) {
++			/* Probably there is no space in this process's address space for
++			   such size of SVM range. This is very rare for 64 bit CPU.
++			*/
++			amdgpu_vamgr_free_va(dev->vamgr, start, size);
++			ret = -ENOMEM;
++			break;
++		} else { /* cpu_address != (void *)start */
++			/* This CPU VM address (start) is not available*/
++			amdgpu_vamgr_free_va(dev->vamgr, start, size);
++			munmap(cpu_address, size);
++			base_required -= step;
++		}
++	}
++
++	return ret;
++}
++
++void amdgpu_svm_vamgr_deinit(struct amdgpu_device *dev)
++{
++	if (dev->vamgr_svm) {
++		amdgpu_vamgr_deinit(dev->vamgr_svm);
++		munmap((void *)dev->vamgr_svm->va_min,
++			dev->vamgr_svm->va_max - dev->vamgr_svm->va_min);
++		free(dev->vamgr_svm);
++	}
++}
++
++int amdgpu_svm_commit(amdgpu_va_handle va_range_handle,
++			void **cpu)
++{
++	if (!va_range_handle || !va_range_handle->address)
++		return -EINVAL;
++	if (va_range_handle->range != amdgpu_gpu_va_range_svm)
++		return -EINVAL;
++
++	if (mprotect((void *)va_range_handle->address,
++		va_range_handle->size, PROT_READ | PROT_WRITE) == 0) {
++		*cpu = (void *)va_range_handle->address;
++		return 0;
++	} else
++		return errno;
++}
++
++int amdgpu_svm_uncommit(amdgpu_va_handle va_range_handle)
++{
++	if (!va_range_handle || !va_range_handle->address)
++		return -EINVAL;
++	if (va_range_handle->range != amdgpu_gpu_va_range_svm)
++		return -EINVAL;
++
++	if (mprotect((void *)va_range_handle->address,
++		va_range_handle->size, PROT_NONE) == 0) {
++		return 0;
++	} else
++		return errno;
++}
+-- 
+2.7.4
+

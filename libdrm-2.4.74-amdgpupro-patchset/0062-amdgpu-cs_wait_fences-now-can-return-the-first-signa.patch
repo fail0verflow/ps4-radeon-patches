@@ -1,0 +1,110 @@
+From 52bf3cba5dcb9064c6c174e6a69c0d40cd064594 Mon Sep 17 00:00:00 2001
+From: "monk.liu" <Monk.Liu@amd.com>
+Date: Tue, 1 Dec 2015 17:48:18 +0800
+Subject: [PATCH 062/117] amdgpu: cs_wait_fences now can return the first
+ signaled fence index
+
+Change-Id: Idf3d3bf0f2d2396a77341f97174d0a173fdd8932
+Signed-off-by: monk.liu <Monk.Liu@amd.com>
+---
+ amdgpu/amdgpu.h            |  3 ++-
+ amdgpu/amdgpu_cs.c         | 12 +++++++++---
+ include/drm/amdgpu_drm.h   |  3 ++-
+ tests/amdgpu/basic_tests.c |  2 +-
+ 4 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 5415bd0..693d841 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -947,6 +947,7 @@ int amdgpu_cs_query_fence_status(struct amdgpu_cs_fence *fence,
+  *                                otherwise, wait at least one fence
+  * \param   timeout_ns  - \c [in] The timeout to wait, in nanoseconds
+  * \param   status      - \c [out] '1' for signaled, '0' for timeout
++ * \param   first       - \c [out] the index of the first signaled fence from @fences
+  *
+  * \return  0 on success
+  *          <0 - Negative POSIX Error code
+@@ -958,7 +959,7 @@ int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
+ 			  uint32_t fence_count,
+ 			  bool wait_all,
+ 			  uint64_t timeout_ns,
+-			  uint32_t *status);
++			  uint32_t *status, uint32_t *first);
+ 
+ /*
+  * Query / Info API
+diff --git a/amdgpu/amdgpu_cs.c b/amdgpu/amdgpu_cs.c
+index 0c9bcc4..b29e8c9 100644
+--- a/amdgpu/amdgpu_cs.c
++++ b/amdgpu/amdgpu_cs.c
+@@ -447,7 +447,8 @@ static int amdgpu_ioctl_wait_fences(struct amdgpu_cs_fence *fences,
+ 				    uint32_t fence_count,
+ 				    bool wait_all,
+ 				    uint64_t timeout_ns,
+-				    uint32_t *status)
++				    uint32_t *status,
++				    uint32_t *first)
+ {
+ 	struct drm_amdgpu_fence *drm_fences;
+ 	amdgpu_device_handle dev = fences[0].context->dev;
+@@ -475,6 +476,10 @@ static int amdgpu_ioctl_wait_fences(struct amdgpu_cs_fence *fences,
+ 		return -errno;
+ 
+ 	*status = args.out.status;
++
++	if (first)
++		*first = args.out.first_signaled;
++
+ 	return 0;
+ }
+ 
+@@ -482,7 +487,8 @@ int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
+ 			  uint32_t fence_count,
+ 			  bool wait_all,
+ 			  uint64_t timeout_ns,
+-			  uint32_t *status)
++			  uint32_t *status,
++			  uint32_t *first)
+ {
+ 	uint32_t ioctl_status = 0;
+ 	uint32_t i;
+@@ -507,7 +513,7 @@ int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
+ 	*status = 0;
+ 
+ 	r = amdgpu_ioctl_wait_fences(fences, fence_count, wait_all, timeout_ns,
+-					&ioctl_status);
++					&ioctl_status, first);
+ 
+ 	if (!r)
+ 		*status = ioctl_status;
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index e07904c..599c2e7 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -330,7 +330,8 @@ struct drm_amdgpu_wait_fences_in {
+ };
+ 
+ struct drm_amdgpu_wait_fences_out {
+-	uint64_t status;
++	uint32_t status;
++	uint32_t first_signaled;
+ };
+ 
+ union drm_amdgpu_wait_fences {
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index f308e9a..e1aaffc 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -1154,7 +1154,7 @@ static void amdgpu_command_submission_multi_fence_wait_all(bool wait_all)
+ 
+ 	r = amdgpu_cs_wait_fences(fence_status, ib_cs_num, wait_all,
+ 				AMDGPU_TIMEOUT_INFINITE,
+-				&expired);
++				&expired, NULL);
+ 	CU_ASSERT_EQUAL(r, 0);
+ 
+ 	r = amdgpu_bo_unmap_and_free(ib_result_handle, va_handle,
+-- 
+2.7.4
+

@@ -1,0 +1,41 @@
+From fca8e6d4d9638158770745d4da5870a131190b3e Mon Sep 17 00:00:00 2001
+From: Chunming Zhou <David1.Zhou@amd.com>
+Date: Wed, 23 Mar 2016 10:29:00 +0800
+Subject: [PATCH 056/117] amdgpu: change max allocation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: I83f8f33140609d4d2c3e54954cc2dc96eeaec6ba
+Signed-off-by: Chunming Zhou <David1.Zhou@amd.com>
+Reviewed-by: Michel Dänzer <michel.daenzer@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ amdgpu/amdgpu_gpu_info.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/amdgpu/amdgpu_gpu_info.c b/amdgpu/amdgpu_gpu_info.c
+index 133952d..037df32 100644
+--- a/amdgpu/amdgpu_gpu_info.c
++++ b/amdgpu/amdgpu_gpu_info.c
+@@ -260,7 +260,7 @@ int amdgpu_query_heap_info(amdgpu_device_handle dev,
+ 		else /* query total vram heap */
+ 			info->heap_size = vram_gtt_info.vram_size;
+ 
+-		info->max_allocation = vram_gtt_info.vram_cpu_accessible_size;
++		info->max_allocation = vram_gtt_info.vram_size * 3 / 4;
+ 
+ 		if (flags & AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)
+ 			r = amdgpu_query_info(dev, AMDGPU_INFO_VIS_VRAM_USAGE,
+@@ -275,7 +275,7 @@ int amdgpu_query_heap_info(amdgpu_device_handle dev,
+ 		break;
+ 	case AMDGPU_GEM_DOMAIN_GTT:
+ 		info->heap_size = vram_gtt_info.gtt_size;
+-		info->max_allocation = vram_gtt_info.vram_cpu_accessible_size;
++		info->max_allocation = vram_gtt_info.gtt_size * 3 / 4;
+ 
+ 		r = amdgpu_query_info(dev, AMDGPU_INFO_GTT_USAGE,
+ 				      sizeof(info->heap_usage),
+-- 
+2.7.4
+

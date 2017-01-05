@@ -1,0 +1,167 @@
+From e977542110f13aa8b0d3e4cf89f56140f0a0009f Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Thu, 29 Oct 2015 16:13:45 -0400
+Subject: [PATCH 031/117] amdgpu: Implement multiGPU SVM support v2
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+With this change, if there are multiple GPU devices, SVM range and allocation is global to all GPU devices.
+This is to meet the OpenCL 2.0 SVM requirement. This is not a perfect solution. But we have not found better solution.
+
+Constraints:
+  1. Application should initialize all relevant devices before allocate SVM address.
+  2. If devices do not have similar GPU VM configuration, libdrm can disable SVM when new device are initialized.
+
+v2:
+  1. Put svm_refcount and svm_valid as a field of amdgpu_bo_va_mgr.
+  2. Adjust title.
+
+Change-Id: I2cfa97e61a9ae1184da9a95f15398e050cb5caaf
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu_internal.h |  6 +++--
+ amdgpu/amdgpu_vamgr.c    | 61 ++++++++++++++++++++++++++++++++----------------
+ 2 files changed, 45 insertions(+), 22 deletions(-)
+
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index 3ae92d9..0506853 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -59,6 +59,10 @@ struct amdgpu_bo_va_mgr {
+ 	struct list_head va_holes;
+ 	pthread_mutex_t bo_va_mutex;
+ 	uint32_t va_alignment;
++	/* reference count. It is used by SVM for mulit GPU.*/
++	atomic_t refcount;
++	/* Is the VM manager valid. It is used by SVM for mulit GPU.*/
++	bool valid;
+ };
+ 
+ struct amdgpu_va {
+@@ -88,8 +92,6 @@ struct amdgpu_device {
+ 	struct amdgpu_bo_va_mgr *vamgr;
+ 	/** The VA manager for the 32bit address space */
+ 	struct amdgpu_bo_va_mgr *vamgr_32;
+-	/** The VA manager for SVM address space */
+-	struct amdgpu_bo_va_mgr *vamgr_svm;
+ };
+ 
+ struct amdgpu_bo {
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index f664216..945b006 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -33,6 +33,9 @@
+ #include "amdgpu_internal.h"
+ #include "util_math.h"
+ 
++/* Devices share SVM range. So a global SVM VAM manager is needed. */
++static struct amdgpu_bo_va_mgr vamgr_svm;
++
+ int amdgpu_va_range_query(amdgpu_device_handle dev,
+ 			  enum amdgpu_gpu_va_range type, uint64_t *start, uint64_t *end)
+ {
+@@ -42,9 +45,9 @@ int amdgpu_va_range_query(amdgpu_device_handle dev,
+ 		*end = dev->dev_info.virtual_address_max;
+ 		return 0;
+ 	case amdgpu_gpu_va_range_svm:
+-		if (dev->vamgr_svm) {
+-			*start = dev->vamgr_svm->va_min;
+-			*end = dev->vamgr_svm->va_max;
++		if (vamgr_svm.valid) {
++			*start = vamgr_svm.va_min;
++			*end = vamgr_svm.va_max;
+ 		} else {
+ 			*start = 0ULL;
+ 			*end = 0ULL;
+@@ -248,8 +251,8 @@ int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+ 	struct amdgpu_bo_va_mgr *vamgr;
+ 
+ 	if (amdgpu_gpu_va_range_svm == va_range_type) {
+-		vamgr = dev->vamgr_svm;
+-		if (!vamgr)
++		vamgr = &vamgr_svm;
++		if (!vamgr->valid)
+ 			return -EINVAL;
+ 	}
+ 	else if (flags & AMDGPU_VA_RANGE_32_BIT)
+@@ -329,6 +332,23 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 	/* return value of this function. */
+ 	int ret;
+ 
++	if (atomic_inc_return(&vamgr_svm.refcount) != 1) {
++		/* This is not the first time to initialize SVM in this process. */
++		if (!vamgr_svm.valid)
++			return -ENOSPC;
++
++		start = amdgpu_vamgr_find_va(dev->vamgr,
++			vamgr_svm.va_max - vamgr_svm.va_min,
++			dev->dev_info.virtual_address_alignment, vamgr_svm.va_min);
++
++		if (start != vamgr_svm.va_min) {
++			vamgr_svm.valid = false;
++			return -ENOSPC;
++		}
++
++		return 0;
++	}
++
+ 	ret = amdgpu_va_range_query(dev, amdgpu_gpu_va_range_general, &start, &end);
+ 	if (ret)
+ 		return ret;
+@@ -356,16 +376,9 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 		cpu_address = mmap((void *)start, size, PROT_NONE,
+ 					MAP_PRIVATE | MAP_NORESERVE | MAP_ANONYMOUS, -1, 0);
+ 		if (cpu_address == (void *)start) {
+-			dev->vamgr_svm = calloc(1, sizeof(struct amdgpu_bo_va_mgr));
+-			if (dev->vamgr_svm == NULL) {
+-				amdgpu_vamgr_free_va(dev->vamgr, start, size);
+-				munmap(cpu_address, size);
+-				ret = -ENOMEM;
+-			} else {
+-				amdgpu_vamgr_init(dev->vamgr_svm, start, start + size,
+-						  dev->dev_info.virtual_address_alignment);
+-				ret = 0;
+-			}
++			amdgpu_vamgr_init(&vamgr_svm, start, start + size,
++					  dev->dev_info.virtual_address_alignment);
++			ret = 0;
+ 			break;
+ 		} else if (cpu_address == MAP_FAILED) {
+ 			/* Probably there is no space in this process's address space for
+@@ -382,16 +395,24 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 		}
+ 	}
+ 
++	if (!ret)
++		vamgr_svm.valid = true;
++
+ 	return ret;
+ }
+ 
+ void amdgpu_svm_vamgr_deinit(struct amdgpu_device *dev)
+ {
+-	if (dev->vamgr_svm) {
+-		amdgpu_vamgr_deinit(dev->vamgr_svm);
+-		munmap((void *)dev->vamgr_svm->va_min,
+-			dev->vamgr_svm->va_max - dev->vamgr_svm->va_min);
+-		free(dev->vamgr_svm);
++	if (atomic_dec_and_test(&vamgr_svm.refcount)) {
++		/* This is the last device referencing SVM. */
++		if (vamgr_svm.va_max != 0) {
++			/* SVM was initialized successfull. So SVM need uninitialization.*/
++			amdgpu_vamgr_deinit(&vamgr_svm);
++			munmap((void *)vamgr_svm.va_min,
++				vamgr_svm.va_max - vamgr_svm.va_min);
++			vamgr_svm.va_max = 0;
++		}
++		vamgr_svm.valid = false;
+ 	}
+ }
+ 
+-- 
+2.7.4
+

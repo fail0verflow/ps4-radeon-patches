@@ -1,0 +1,31 @@
+From 231f4155aba4fcef48298c44d02047db111885ca Mon Sep 17 00:00:00 2001
+From: jimqu <Jim.Qu@amd.com>
+Date: Mon, 16 Nov 2015 15:15:14 +0800
+Subject: [PATCH 041/117] amdgpu: add query amdgpu pinning memory capability
+ defination
+
+Signed-off-by: JimQu <Jim.Qu@amd.com>
+
+Change-Id: I5f0095ef0cb550fad67aca222009b71634d79b4b
+Reviewed-by: Chunming Zhou <david1.zhou@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+---
+ include/drm/amdgpu_drm.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 981b346..4ddb649 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -510,6 +510,8 @@ struct drm_amdgpu_cs_chunk_data {
+ #define AMDGPU_INFO_VIRTUAL_RANGE		0x18
+ /* gpu capability */
+ #define AMDGPU_INFO_CAPABILITY			0x50
++	/* query pin memory capability */
++	#define AMDGPU_INFO_CAPABILITY_PIN_MEM	0x01
+ 
+ #define AMDGPU_INFO_MMR_SE_INDEX_SHIFT	0
+ #define AMDGPU_INFO_MMR_SE_INDEX_MASK	0xff
+-- 
+2.7.4
+

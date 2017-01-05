@@ -1,0 +1,187 @@
+From 1474cc7321f29b223249f9f7c09797534aa67288 Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Thu, 11 Aug 2016 15:25:14 +0800
+Subject: [PATCH 115/117] amdgpu: implement direct gma
+
+Change-Id: I37a6a0f79a91b8e793fc90eb3955045bebf24848
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+---
+ amdgpu/amdgpu.h          | 43 +++++++++++++++++++++++++++++++++++++
+ amdgpu/amdgpu_bo.c       | 55 +++++++++++++++++++++++++++++++++++++++++++++++-
+ include/drm/amdgpu_drm.h | 12 +++++++++++
+ 3 files changed, 109 insertions(+), 1 deletion(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 763a3a6..525bf8e 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -727,6 +727,49 @@ int amdgpu_find_bo_by_cpu_mapping(amdgpu_device_handle dev,
+ 				  amdgpu_bo_handle *buf_handle,
+ 				  uint64_t *offset_in_bo);
+ 
++/**
++ * Request GPU access to physical memory from 3rd party device.
++ *
++ * \param dev - [in] Device handle. See #amdgpu_device_initialize()
++ * \param phys_address - [in] Physical address from 3rd party device which
++ * we want to map to GPU address space (make GPU accessible)
++ * (This address must be correctly aligned).
++ * \param size - [in] Size of allocation (must be correctly aligned)
++ * \param buf_handle - [out] Buffer handle for the userptr memory
++ * resource on submission and be used in other operations.
++ *
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++ * \note
++ * This call should guarantee that such memory will be persistently
++ * "locked" / make non-pageable. The purpose of this call is to provide
++ * opportunity for GPU get access to this resource during submission.
++ *
++ *
++ * Supported (theoretical) max. size of mapping is restricted only by
++ * capability.direct_gma_size. See #amdgpu_query_capability()
++ *
++ * It is responsibility of caller to correctly specify physical_address
++*/
++int amdgpu_create_bo_from_phys_mem(amdgpu_device_handle dev,
++				uint64_t phys_address, uint64_t size,
++				amdgpu_bo_handle *buf_handle);
++
++/**
++ * Get physical address from BO
++ *
++ * \param buf_handle - [in] Buffer handle for the physical address.
++ * \param phys_address - [out] Physical address of this BO.
++ *
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++*/
++int amdgpu_bo_get_phys_address(amdgpu_bo_handle buf_handle,
++					uint64_t *phys_address);
+ 
+ /**
+  * Free previosuly allocated memory
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index a07d0b5..6abc5e3 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -87,7 +87,8 @@ int amdgpu_bo_alloc(amdgpu_device_handle dev,
+ 	int r = 0;
+ 
+ 	/* It's an error if the heap is not specified */
+-	if (!(heap & (AMDGPU_GEM_DOMAIN_GTT | AMDGPU_GEM_DOMAIN_VRAM)))
++	if (!(heap & (AMDGPU_GEM_DOMAIN_GTT | AMDGPU_GEM_DOMAIN_VRAM
++		      | AMDGPU_GEM_DOMAIN_DGMA)))
+ 		return -EINVAL;
+ 
+ 	bo = calloc(1, sizeof(struct amdgpu_bo));
+@@ -570,6 +571,58 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 	return r;
+ }
+ 
++int amdgpu_create_bo_from_phys_mem(amdgpu_device_handle dev,
++				uint64_t phys_address, uint64_t size,
++				amdgpu_bo_handle *buf_handle)
++{
++	struct drm_amdgpu_gem_dgma args;
++	amdgpu_bo_handle bo;
++	int r;
++
++	if (phys_address == 0 || phys_address & 4095 ||
++		size == 0 || size & 4095)
++		return -EINVAL;
++
++	args.addr = phys_address;
++	args.size = size;
++	args.op = AMDGPU_GEM_DGMA_IMPORT;
++	r = drmCommandWriteRead(dev->fd, DRM_AMDGPU_GEM_DGMA,
++				&args, sizeof(args));
++	if (r)
++		return r;
++
++	bo = calloc(1, sizeof(struct amdgpu_bo));
++	if (!bo)
++		return -ENOMEM;
++
++	atomic_set(&bo->refcount, 1);
++	pthread_mutex_init(&bo->cpu_access_mutex, NULL);
++	bo->dev = dev;
++	bo->alloc_size = size;
++	bo->handle = args.handle;
++
++	*buf_handle = bo;
++
++	return 0;
++}
++
++int amdgpu_bo_get_phys_address(amdgpu_bo_handle buf_handle,
++					uint64_t *phys_address)
++{
++	struct drm_amdgpu_gem_dgma args;
++	int r;
++
++	args.op = AMDGPU_GEM_DGMA_QUERY_PHYS_ADDR;
++	args.handle = buf_handle->handle;
++	r = drmCommandWriteRead(buf_handle->dev->fd, DRM_AMDGPU_GEM_DGMA,
++				&args, sizeof(args));
++	if (r)
++		return r;
++
++	*phys_address = args.addr;
++	return 0;
++}
++
+ int amdgpu_bo_free(amdgpu_bo_handle buf_handle)
+ {
+ 	/* Just drop the reference. */
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 14d800e..413a9dc 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -47,6 +47,7 @@
+ #define DRM_AMDGPU_GEM_OP		0x10
+ #define DRM_AMDGPU_GEM_USERPTR		0x11
+ /* hybrid specific ioctls */
++#define DRM_AMDGPU_GEM_DGMA		0x5c
+ #define DRM_AMDGPU_FREESYNC		0x5d
+ #define DRM_AMDGPU_WAIT_FENCES		0x5e
+ #define DRM_AMDGPU_GEM_FIND_BO		0x5f
+@@ -64,6 +65,7 @@
+ #define DRM_IOCTL_AMDGPU_GEM_OP		DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_OP, struct drm_amdgpu_gem_op)
+ #define DRM_IOCTL_AMDGPU_GEM_USERPTR	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_USERPTR, struct drm_amdgpu_gem_userptr)
+ /* hybrid specific ioctls */
++#define DRM_IOCTL_AMDGPU_GEM_DGMA	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_DGMA, struct drm_amdgpu_gem_dgma)
+ #define DRM_IOCTL_AMDGPU_FREESYNC	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_FREESYNC, struct drm_amdgpu_freesync)
+ #define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
+ #define DRM_IOCTL_AMDGPU_GEM_FIND_BO	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_FIND_BO, struct drm_amdgpu_gem_find_bo)
+@@ -74,6 +76,7 @@
+ #define AMDGPU_GEM_DOMAIN_GDS		0x8
+ #define AMDGPU_GEM_DOMAIN_GWS		0x10
+ #define AMDGPU_GEM_DOMAIN_OA		0x20
++#define AMDGPU_GEM_DOMAIN_DGMA		0x40
+ 
+ /* Flag that CPU access will be required for the case of VRAM domain */
+ #define AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED	(1 << 0)
+@@ -209,6 +212,15 @@ struct drm_amdgpu_gem_userptr {
+ 	uint32_t		handle;
+ };
+ 
++#define AMDGPU_GEM_DGMA_IMPORT			0
++#define AMDGPU_GEM_DGMA_QUERY_PHYS_ADDR	1
++struct drm_amdgpu_gem_dgma {
++	uint64_t		addr;
++	uint64_t		size;
++	uint32_t		op;
++	uint32_t		handle;
++};
++
+ struct drm_amdgpu_gem_find_bo {
+        uint64_t                addr;
+        uint64_t                size;
+-- 
+2.7.4
+

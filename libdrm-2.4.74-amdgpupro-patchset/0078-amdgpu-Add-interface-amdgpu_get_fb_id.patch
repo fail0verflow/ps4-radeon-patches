@@ -1,0 +1,124 @@
+From 713485538f2f98590cd3e89ec10a8d9e77f304dc Mon Sep 17 00:00:00 2001
+From: jqdeng <Emily.Deng@amd.com>
+Date: Tue, 5 Jul 2016 15:43:37 +0800
+Subject: [PATCH 078/117] amdgpu: Add interface amdgpu_get_fb_id
+
+The amdgpu_get_fb_id is used to export the crtc's
+framebuffer's buffer id to OpenGL  driver for capturing
+desktop to OpenGL texture. This is for linux rapidfire server.
+
+Signed-off-by: jqdeng <Emily.Deng@amd.com>
+Reviewed-by: Chunming Zhou <David1.Zhou@amd.com>
+---
+ amdgpu/amdgpu-symbol-check |  1 +
+ amdgpu/amdgpu.h            | 15 +++++++++++++++
+ amdgpu/amdgpu_bo.c         | 48 ++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 64 insertions(+)
+
+diff --git a/amdgpu/amdgpu-symbol-check b/amdgpu/amdgpu-symbol-check
+index 648db9b..e26ffe2 100755
+--- a/amdgpu/amdgpu-symbol-check
++++ b/amdgpu/amdgpu-symbol-check
+@@ -48,6 +48,7 @@ amdgpu_read_mm_registers
+ amdgpu_va_range_alloc
+ amdgpu_va_range_free
+ amdgpu_va_range_query
++amdgpu_get_fb_id
+ EOF
+ done)
+ 
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index d8c436f..0f31100 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -637,6 +637,21 @@ int amdgpu_bo_import(amdgpu_device_handle dev,
+ 		     struct amdgpu_bo_import_result *output);
+ 
+ /**
++ * Allow others to get access to crtc's framebuffer
++ *
++ * \param   dev   - \c [in] Device handle.
++ *				   See #amdgpu_device_initialize()
++ * \param   fb_id - \c [out] the first crtc's framebuffer's buffer_id
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++ * \sa amdgpu_get_fb_id()
++ *
++*/
++int amdgpu_get_fb_id(amdgpu_device_handle dev, unsigned int *fb_id);
++
++/**
+  * Request GPU access to user allocated memory e.g. via "malloc"
+  *
+  * \param dev - [in] Device handle. See #amdgpu_device_initialize()
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index c3f5fb9..49b951b 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -43,6 +43,7 @@
+ #include "amdgpu_internal.h"
+ #include "util_hash_table.h"
+ #include "util_math.h"
++#include "xf86drmMode.h"
+ 
+ static void amdgpu_close_kms_handle(amdgpu_device_handle dev,
+ 				     uint32_t handle)
+@@ -417,6 +418,53 @@ int amdgpu_bo_import(amdgpu_device_handle dev,
+ 	return 0;
+ }
+ 
++/* Get the first use crtc's frame buffer's buffer_id. */
++int amdgpu_get_fb_id(amdgpu_device_handle dev, unsigned int *fb_id)
++{
++	drmModeResPtr mode_res;
++	int count_crtcs;
++	drmModeCrtcPtr mode_crtc;
++	int current_id = 0;
++	drmModeFBPtr fbcur;
++	struct drm_amdgpu_gem_create_in bo_info = {};
++	struct drm_amdgpu_gem_op gem_op = {};
++	int r = 0;
++	int i;
++	struct amdgpu_bo *bo = NULL;
++	int flag_auth = 0;
++	int fd = dev->fd;
++
++	amdgpu_get_auth(dev->fd, &flag_auth);
++	if (flag_auth) {
++		fd = dev->fd;
++	} else {
++		amdgpu_get_auth(dev->flink_fd, &flag_auth);
++		if (flag_auth) {
++			fd = dev->flink_fd;
++		} else {
++			fprintf(stderr, "amdgpu: amdgpu_get_fb_id, couldn't get the auth fd\n");
++			return EINVAL;
++		}
++	}
++
++	mode_res = drmModeGetResources(fd);
++	if (!mode_res)
++		return EFAULT;
++
++	count_crtcs = mode_res->count_crtcs;
++	for (i = 0; i < mode_res->count_crtcs; i++) {
++		mode_crtc = drmModeGetCrtc(fd, mode_res->crtcs[i]);
++		if (mode_crtc->buffer_id) {
++			current_id = mode_crtc->buffer_id;
++			if (current_id != NULL)
++				break;
++		}
++	}
++	*fb_id = current_id;
++
++	return r;
++}
++
+ int amdgpu_bo_free(amdgpu_bo_handle buf_handle)
+ {
+ 	/* Just drop the reference. */
+-- 
+2.7.4
+

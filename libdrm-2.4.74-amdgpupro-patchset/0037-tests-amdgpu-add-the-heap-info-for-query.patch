@@ -1,0 +1,60 @@
+From 30625ac043a1dd882df4f9d1feed4b08ebdd6371 Mon Sep 17 00:00:00 2001
+From: Jammy Zhou <Jammy.Zhou@amd.com>
+Date: Mon, 9 Nov 2015 13:40:41 +0800
+Subject: [PATCH 037/117] tests/amdgpu: add the heap info for query
+
+Change-Id: Icdaad4e373c316e0dde9a24cda4252ffd5163f1a
+Signed-off-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ tests/amdgpu/basic_tests.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index 47c796e..ec68dac 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -258,6 +258,32 @@ static void amdgpu_query_firmware_info_test(void)
+ 	amdgpu_vprintf("    vce feature: 0x%x\n", feature);
+ }
+ 
++static void amdgpu_query_heap_info_test(void)
++{
++	struct amdgpu_heap_info info;
++	uint64_t total_vram, total_vram_used;
++
++	amdgpu_query_heap_info(device_handle, AMDGPU_GEM_DOMAIN_VRAM,
++			       0, &info);
++	total_vram = info.heap_size;
++	total_vram_used = info.heap_usage;
++
++	amdgpu_query_heap_info(device_handle, AMDGPU_GEM_DOMAIN_VRAM,
++			       AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED, &info);
++	amdgpu_vprintf("\n    Visible VRAM info...\n");
++	amdgpu_vprintf("    size: 0x%x\n", info.heap_size);
++	amdgpu_vprintf("    usage: 0x%x\n", info.heap_usage);
++	amdgpu_vprintf("\n    Invisible VRAM info...\n");
++	amdgpu_vprintf("    size: 0x%x\n", total_vram - info.heap_size);
++	amdgpu_vprintf("    usage: 0x%x\n", total_vram_used - info.heap_usage);
++
++	amdgpu_query_heap_info(device_handle, AMDGPU_GEM_DOMAIN_GTT,
++			       0, &info);
++	amdgpu_vprintf("\n    GTT info...\n");
++	amdgpu_vprintf("    size: 0x%x\n", info.heap_size);
++	amdgpu_vprintf("    usage: 0x%x\n", info.heap_usage);
++}
++
+ static void amdgpu_query_info_test(void)
+ {
+ 	amdgpu_query_gpu_info_test();
+@@ -267,6 +293,7 @@ static void amdgpu_query_info_test(void)
+ 	amdgpu_query_hw_info_test(AMDGPU_HW_IP_DMA);
+ 	amdgpu_query_hw_info_test(AMDGPU_HW_IP_UVD);
+ 	amdgpu_query_hw_info_test(AMDGPU_HW_IP_VCE);
++	amdgpu_query_heap_info_test();
+ }
+ 
+ static void amdgpu_memory_alloc(void)
+-- 
+2.7.4
+

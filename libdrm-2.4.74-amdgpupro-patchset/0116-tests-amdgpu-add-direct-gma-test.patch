@@ -1,0 +1,107 @@
+From 331577c5a8736f15fdf55a7606414efcf78a5dff Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Thu, 11 Aug 2016 15:26:16 +0800
+Subject: [PATCH 116/117] tests/amdgpu: add direct gma test
+
+Change-Id: Ib00252eff16a84f16f01039ff39f957bff903bae
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+---
+ tests/amdgpu/bo_tests.c | 64 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 1 deletion(-)
+
+diff --git a/tests/amdgpu/bo_tests.c b/tests/amdgpu/bo_tests.c
+index 195667f..5d1f67b 100644
+--- a/tests/amdgpu/bo_tests.c
++++ b/tests/amdgpu/bo_tests.c
+@@ -26,6 +26,7 @@
+ #endif
+ 
+ #include <stdio.h>
++#include <inttypes.h>
+ 
+ #include "CUnit/Basic.h"
+ 
+@@ -47,7 +48,7 @@ static void amdgpu_bo_export_import(void);
+ static void amdgpu_bo_metadata(void);
+ static void amdgpu_bo_map_unmap(void);
+ static void amdgpu_get_fb_id_and_handle(void);
+-
++static void amdgpu_bo_direct_gma(void);
+ 
+ CU_TestInfo bo_tests[] = {
+ 	{ "Export/Import",  amdgpu_bo_export_import },
+@@ -56,6 +57,7 @@ CU_TestInfo bo_tests[] = {
+ #endif
+ 	{ "CPU map/unmap",  amdgpu_bo_map_unmap },
+ 	{ "GET FB_ID AND FB_HANDLE",  amdgpu_get_fb_id_and_handle },
++	{ "Direct GMA", amdgpu_bo_direct_gma },
+ 	CU_TEST_INFO_NULL,
+ };
+ 
+@@ -202,3 +204,63 @@ static void amdgpu_get_fb_id_and_handle(void)
+ 	CU_ASSERT_EQUAL(r, 0);
+ 	CU_ASSERT_NOT_EQUAL(output.buf_handle, 0);
+ }
++
++#define TEST_LOOP 20
++static void amdgpu_bo_direct_gma(void)
++{
++	amdgpu_bo_handle buf_handle[TEST_LOOP] = {0};
++	amdgpu_bo_handle buf_handle_import[TEST_LOOP] = {0};
++	uint32_t *ptr[TEST_LOOP] = {0};
++	struct amdgpu_bo_alloc_request req = {0};
++	struct drm_amdgpu_capability cap;
++	uint64_t size=4096, phys_addr, remain;
++	int i, j, r;
++
++	amdgpu_query_capability(device_handle, &cap);
++	if(!(cap.flag & AMDGPU_CAPABILITY_DIRECT_GMA_FLAG))
++		return;
++
++	amdgpu_vprintf("direct_gma_size is %d MB\n", cap.direct_gma_size);
++	remain = cap.direct_gma_size << 20;
++
++	req.preferred_heap = AMDGPU_GEM_DOMAIN_DGMA;
++	for (i = 0; i < TEST_LOOP; i++) {
++		req.alloc_size = size;
++		r = amdgpu_bo_alloc(device_handle, &req, &buf_handle[i]);
++		CU_ASSERT_EQUAL(r, 0);
++
++		r = amdgpu_bo_get_phys_address(buf_handle[i], &phys_addr);
++		CU_ASSERT_EQUAL(r, 0);
++		amdgpu_vprintf("bo_size %"PRIx64" phys_addr %"PRIx64"\n", size, phys_addr);
++		r = amdgpu_create_bo_from_phys_mem(device_handle, phys_addr, size, &buf_handle_import[i]);
++		CU_ASSERT_EQUAL(r, 0);
++		r = amdgpu_bo_cpu_map(buf_handle_import[i], (void **)&ptr[i]);
++		CU_ASSERT_EQUAL(r, 0);
++
++		for (j = 0; j < (size / 4); ++j)
++			ptr[i][j] = 0xdeadbeef;
++		remain -= size;
++		size <<= 1;
++		amdgpu_vprintf("test loop %d finished, remain %"PRIx64", try to alloc %"PRIx64"\n", i, remain, size);
++		if (remain < size)
++			break;
++
++	}
++
++	for (i = 0; i < TEST_LOOP; i++) {
++		if (ptr[i]) {
++			r = amdgpu_bo_cpu_unmap(buf_handle_import[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++
++		if (buf_handle_import[i]) {
++			r = amdgpu_bo_free(buf_handle_import[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++
++		if (buf_handle[i]) {
++			r = amdgpu_bo_free(buf_handle[i]);
++			CU_ASSERT_EQUAL(r, 0);
++		}
++	}
++}
+-- 
+2.7.4
+

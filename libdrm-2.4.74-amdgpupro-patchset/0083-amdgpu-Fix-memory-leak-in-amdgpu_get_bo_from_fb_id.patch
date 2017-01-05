@@ -1,0 +1,73 @@
+From 2f5986c7208a9b8534f2fb0981fc5d5fd7c65e30 Mon Sep 17 00:00:00 2001
+From: jqdeng <Emily.Deng@amd.com>
+Date: Thu, 14 Jul 2016 17:32:27 +0800
+Subject: [PATCH 083/117] amdgpu: Fix memory leak in amdgpu_get_bo_from_fb_id
+
+Signed-off-by: jqdeng <Emily.Deng@amd.com>
+Reviewed-by: Jim Qu <Jim.Qu@amd.com>
+---
+ amdgpu/amdgpu_bo.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index ebfb7cf..a07d0b5 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -497,11 +497,15 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 
+ 	fbcur = drmModeGetFB(fd, fb_id);
+ 
++	if (fbcur == NULL)
++		return EFAULT;
++
+ 	pthread_mutex_lock(&dev->bo_table_mutex);
+ 	if (fd != dev->fd) {
+ 		r = drmPrimeHandleToFD(fd, fbcur->handle, DRM_CLOEXEC, &dma_fd);
+ 		if (r) {
+ 			pthread_mutex_unlock(&dev->bo_table_mutex);
++			drmModeFreeFB(fbcur);
+ 			return r;
+ 		}
+ 		r = drmPrimeFDToHandle(dev->fd, dma_fd, &fbcur->handle );
+@@ -510,6 +514,7 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 
+ 		if (r) {
+ 			pthread_mutex_unlock(&dev->bo_table_mutex);
++			drmModeFreeFB(fbcur);
+ 			return r;
+ 		}
+ 	}
+@@ -524,12 +529,14 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 
+ 		output->buf_handle = bo;
+ 		output->alloc_size = bo->alloc_size;
++		drmModeFreeFB(fbcur);
+ 		return 0;
+ 	}
+ 
+ 	bo = calloc(1, sizeof(struct amdgpu_bo));
+ 	if (!bo) {
+ 		pthread_mutex_unlock(&dev->bo_table_mutex);
++		drmModeFreeFB(fbcur);
+ 		return -ENOMEM;
+ 	}
+ 
+@@ -543,6 +550,7 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 	if (r) {
+ 		free(bo);
+ 		pthread_mutex_unlock(&dev->bo_table_mutex);
++		drmModeFreeFB(fbcur);
+ 		return r;
+ 	}
+ 
+@@ -558,6 +566,7 @@ int amdgpu_get_bo_from_fb_id(amdgpu_device_handle dev, unsigned int fb_id, struc
+ 	pthread_mutex_unlock(&dev->bo_table_mutex);
+ 
+ 	output->alloc_size = bo->alloc_size;
++	drmModeFreeFB(fbcur);
+ 	return r;
+ }
+ 
+-- 
+2.7.4
+

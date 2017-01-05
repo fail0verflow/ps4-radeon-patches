@@ -1,0 +1,32 @@
+From e5512b2e226abad4e1719b4de4a7427900bc9317 Mon Sep 17 00:00:00 2001
+From: Chunming Zhou <David1.Zhou@amd.com>
+Date: Thu, 3 Dec 2015 16:52:33 +0800
+Subject: [PATCH 061/117] amdgpu: add bo handle to hash table when cpu mapping
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: Id79d98877c61510a1986d65befec6ce6713edae7
+Signed-off-by: Chunming Zhou <David1.Zhou@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu_bo.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index ff78039..aa0d001 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -463,7 +463,7 @@ int amdgpu_bo_cpu_map(amdgpu_bo_handle bo, void **cpu)
+ 		pthread_mutex_unlock(&bo->cpu_access_mutex);
+ 		return -errno;
+ 	}
+-
++	amdgpu_add_handle_to_table(bo);
+ 	bo->cpu_ptr = ptr;
+ 	bo->cpu_map_count = 1;
+ 	pthread_mutex_unlock(&bo->cpu_access_mutex);
+-- 
+2.7.4
+

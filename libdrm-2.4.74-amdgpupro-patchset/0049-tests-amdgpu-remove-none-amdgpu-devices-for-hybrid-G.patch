@@ -1,0 +1,59 @@
+From de7234f8ae699b3c78043a19e32fc7a9596fbeac Mon Sep 17 00:00:00 2001
+From: Qiang Yu <Qiang.Yu@amd.com>
+Date: Tue, 8 Mar 2016 17:57:06 +0800
+Subject: [PATCH 049/117] tests/amdgpu: remove none amdgpu devices for hybrid
+ GPU platforms
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: I5991e74ddea212bde4954924de12b26c1ac54936
+Signed-off-by: Qiang Yu <Qiang.Yu@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ tests/amdgpu/amdgpu_test.c | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/tests/amdgpu/amdgpu_test.c b/tests/amdgpu/amdgpu_test.c
+index 46f55c7..dccf221 100644
+--- a/tests/amdgpu/amdgpu_test.c
++++ b/tests/amdgpu/amdgpu_test.c
+@@ -136,7 +136,7 @@ static const char options[]   = "hlvws:t:";
+ int main(int argc, char **argv)
+ {
+ 	int c;			/* Character received from getopt */
+-	int i = 0;
++	int i = 0, j = 0;
+ 	int suite_id = -1;	/* By default run everything */
+ 	int test_id  = -1;	/* By default run all tests in the suite */
+ 	CU_pSuite pSuite = NULL;
+@@ -210,6 +210,26 @@ int main(int argc, char **argv)
+ 	}
+ 	drmFreeDevices(devices, num_devices);
+ 
++	/* remove none amdgpu devices */
++	for (i = 0; i < num_devices; i++) {
++		drmVersionPtr retval = drmGetVersion(drm_amdgpu[i]);
++		if (retval && !strcmp("amdgpu", retval->name)) {
++			if (i != j) {
++				drm_amdgpu[j] = drm_amdgpu[i];
++				drm_amdgpu[i] = -1;
++			}
++			j++;
++		}
++		else {
++			close(drm_amdgpu[i]);
++			drm_amdgpu[i] = -1;
++		}
++	}
++	if (drm_amdgpu[0] < 0) {
++		perror("no amdgpu device found");
++		exit(EXIT_FAILURE);
++	}
++
+ 	/** Display version of DRM driver */
+ 	drmVersionPtr retval = drmGetVersion(drm_amdgpu[0]);
+ 
+-- 
+2.7.4
+

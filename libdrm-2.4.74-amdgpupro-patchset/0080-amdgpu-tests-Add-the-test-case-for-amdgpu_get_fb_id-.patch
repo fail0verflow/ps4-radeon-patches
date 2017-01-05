@@ -1,0 +1,55 @@
+From da3e76d7d0dacc732927990344dbe40e69abb8f0 Mon Sep 17 00:00:00 2001
+From: jqdeng <Emily.Deng@amd.com>
+Date: Tue, 5 Jul 2016 15:45:33 +0800
+Subject: [PATCH 080/117] amdgpu/tests: Add the test case for amdgpu_get_fb_id
+ and amdgpu_get_bo_from_fb_id.
+
+Signed-off-by: jqdeng <Emily.Deng@amd.com>
+Reviewed-by: Chunming Zhou <David1.Zhou@amd.com>
+---
+ tests/amdgpu/bo_tests.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/tests/amdgpu/bo_tests.c b/tests/amdgpu/bo_tests.c
+index 993895d..195667f 100644
+--- a/tests/amdgpu/bo_tests.c
++++ b/tests/amdgpu/bo_tests.c
+@@ -46,6 +46,8 @@ static amdgpu_va_handle va_handle;
+ static void amdgpu_bo_export_import(void);
+ static void amdgpu_bo_metadata(void);
+ static void amdgpu_bo_map_unmap(void);
++static void amdgpu_get_fb_id_and_handle(void);
++
+ 
+ CU_TestInfo bo_tests[] = {
+ 	{ "Export/Import",  amdgpu_bo_export_import },
+@@ -53,6 +55,7 @@ CU_TestInfo bo_tests[] = {
+ 	{ "Metadata",  amdgpu_bo_metadata },
+ #endif
+ 	{ "CPU map/unmap",  amdgpu_bo_map_unmap },
++	{ "GET FB_ID AND FB_HANDLE",  amdgpu_get_fb_id_and_handle },
+ 	CU_TEST_INFO_NULL,
+ };
+ 
+@@ -184,3 +187,18 @@ static void amdgpu_bo_map_unmap(void)
+ 	r = amdgpu_bo_cpu_unmap(buffer_handle);
+ 	CU_ASSERT_EQUAL(r, 0);
+ }
++
++static void amdgpu_get_fb_id_and_handle(void)
++{
++	uint32_t *ptr;
++	int i, r;
++	unsigned int fb_id;
++	struct amdgpu_bo_import_result output;
++
++	r = amdgpu_get_fb_id(device_handle, &fb_id);
++	CU_ASSERT_EQUAL(r, 0);
++	CU_ASSERT_NOT_EQUAL(fb_id, 0);
++	r = amdgpu_get_bo_from_fb_id(device_handle, fb_id, &output);
++	CU_ASSERT_EQUAL(r, 0);
++	CU_ASSERT_NOT_EQUAL(output.buf_handle, 0);
++}
+-- 
+2.7.4
+

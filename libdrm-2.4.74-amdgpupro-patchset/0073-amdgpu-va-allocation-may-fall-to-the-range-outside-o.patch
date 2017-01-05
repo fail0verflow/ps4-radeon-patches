@@ -1,0 +1,38 @@
+From 1f7873fb8c46e42b4b83110289ac1c9a40ed93dd Mon Sep 17 00:00:00 2001
+From: Junwei Zhang <Jerry.Zhang@amd.com>
+Date: Tue, 28 Jun 2016 17:38:05 +0800
+Subject: [PATCH 073/117] amdgpu: va allocation may fall to the range outside
+ of requested [min,max]
+
+Change-Id: I3e1db613bdc7495a8968914d8560d5ea3aa6d76c
+Signed-off-by: David Mao <david.mao@amd.com>
+Reviewed-by: Ken Wang <Qingqing.Wang@amd.com>
+---
+ amdgpu/amdgpu_vamgr.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index 82653e9..f3e38f6 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -192,10 +192,16 @@ static uint64_t amdgpu_vamgr_find_va_in_range(struct amdgpu_bo_va_mgr *mgr, uint
+ 			(hole->offset < range_min && range_min + size > hole->offset + hole->size) ||
+ 			hole->size < size)
+ 			continue;
+-		offset = hole->offset;
++		/*
++		 * it is possible that the hole covers more than one range,
++		 * thus we need to respect the range_min
++		 */
++		offset = MAX2(hole->offset, range_min);
+ 		waste = offset % alignment;
+ 		waste = waste ? alignment - waste : 0;
+ 		offset += waste;
++		/* the gap between the range_min and hole->offset need to be covered as well */
++		waste += offset - hole->offset;
+ 		if (offset >= (hole->offset + hole->size)) {
+ 			continue;
+ 		}
+-- 
+2.7.4
+

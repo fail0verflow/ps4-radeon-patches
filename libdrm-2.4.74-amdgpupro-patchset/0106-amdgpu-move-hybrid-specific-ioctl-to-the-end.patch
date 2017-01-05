@@ -1,0 +1,48 @@
+From abd3f05b15245951daf6e6aa4228e176e433ae5c Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Tue, 9 Aug 2016 15:47:51 +0800
+Subject: [PATCH 106/117] amdgpu: move hybrid specific ioctl to the end
+
+To avoid conflicts
+
+Change-Id: I41a3b62363b2d653e6e8726073c2e9c816604030
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+Reviewed-by: Chunming Zhou <david1.zhou@amd.com>
+---
+ include/drm/amdgpu_drm.h | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 7ffd26b..6ccad71 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -46,9 +46,10 @@
+ #define DRM_AMDGPU_WAIT_CS		0x09
+ #define DRM_AMDGPU_GEM_OP		0x10
+ #define DRM_AMDGPU_GEM_USERPTR		0x11
+-#define DRM_AMDGPU_WAIT_FENCES		0x12
+-#define DRM_AMDGPU_GEM_FIND_BO          0x13
+-#define DRM_AMDGPU_FREESYNC		0x14
++#define DRM_AMDGPU_FREESYNC	        0x14
++/* hybrid specific ioctls */
++#define DRM_AMDGPU_WAIT_FENCES		0x5e
++#define DRM_AMDGPU_GEM_FIND_BO		0x5f
+ 
+ #define DRM_IOCTL_AMDGPU_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_CREATE, union drm_amdgpu_gem_create)
+ #define DRM_IOCTL_AMDGPU_GEM_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_MMAP, union drm_amdgpu_gem_mmap)
+@@ -62,9 +63,10 @@
+ #define DRM_IOCTL_AMDGPU_WAIT_CS	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_CS, union drm_amdgpu_wait_cs)
+ #define DRM_IOCTL_AMDGPU_GEM_OP		DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_OP, struct drm_amdgpu_gem_op)
+ #define DRM_IOCTL_AMDGPU_GEM_USERPTR	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_USERPTR, struct drm_amdgpu_gem_userptr)
+-#define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
+-#define DRM_IOCTL_AMDGPU_GEM_FIND_BO      DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_FIND_BO, struct drm_amdgpu_gem_find_bo)
+ #define DRM_IOCTL_AMDGPU_FREESYNC	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_FREESYNC, struct drm_amdgpu_freesync)
++/* hybrid specific ioctls */
++#define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
++#define DRM_IOCTL_AMDGPU_GEM_FIND_BO	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_FIND_BO, struct drm_amdgpu_gem_find_bo)
+ 
+ #define AMDGPU_GEM_DOMAIN_CPU		0x1
+ #define AMDGPU_GEM_DOMAIN_GTT		0x2
+-- 
+2.7.4
+

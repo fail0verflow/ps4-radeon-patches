@@ -1,0 +1,60 @@
+From 056084ac47a9b6aab3c3815758b31ef961c1297f Mon Sep 17 00:00:00 2001
+From: Qiang Yu <Qiang.Yu@amd.com>
+Date: Fri, 24 Jun 2016 12:05:22 +0800
+Subject: [PATCH 070/117] amdgpu: add amdgpu_bo_inc_ref() function.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: Icdc00d3e22e48120ca6f4d73ffd05ba43551ad2c
+Signed-off-by: Qiang Yu <Qiang.Yu@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu.h    | 13 +++++++++++++
+ amdgpu/amdgpu_bo.c |  6 ++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 693d841..d8c436f 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -716,6 +716,19 @@ int amdgpu_find_bo_by_cpu_mapping(amdgpu_device_handle dev,
+ int amdgpu_bo_free(amdgpu_bo_handle buf_handle);
+ 
+ /**
++ * Increase the reference count of a buffer object
++ *
++ * \param   bo - \c [in]  Buffer object handle to increase the reference count
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++ * \sa amdgpu_bo_alloc(), amdgpu_bo_free()
++ *
++*/
++int amdgpu_bo_inc_ref(amdgpu_bo_handle bo);
++
++/**
+  * Request CPU access to GPU accessible memory
+  *
+  * \param   buf_handle - \c [in] Buffer handle
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index aa0d001..c3f5fb9 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -424,6 +424,12 @@ int amdgpu_bo_free(amdgpu_bo_handle buf_handle)
+ 	return 0;
+ }
+ 
++int amdgpu_bo_inc_ref(amdgpu_bo_handle bo)
++{
++	atomic_inc(&bo->refcount);
++	return 0;
++}
++
+ int amdgpu_bo_cpu_map(amdgpu_bo_handle bo, void **cpu)
+ {
+ 	union drm_amdgpu_gem_mmap args;
+-- 
+2.7.4
+

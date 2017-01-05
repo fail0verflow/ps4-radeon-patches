@@ -1,0 +1,53 @@
+From bd51d57069011aef5372d68942cee32a13013108 Mon Sep 17 00:00:00 2001
+From: Hawking Zhang <Hawking.Zhang@amd.com>
+Date: Thu, 4 Aug 2016 14:26:51 +0800
+Subject: [PATCH 104/117] drm/amdgpu: add freesync ioctl defines
+
+Change-Id: Id5d607fee4ae119015ca685a508a2ee140a8e331
+Signed-off-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Reviewed-by: Flora Cui <Flora.Cui@amd.com>
+---
+ include/drm/amdgpu_drm.h | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 9aa0420..7ffd26b 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -48,6 +48,7 @@
+ #define DRM_AMDGPU_GEM_USERPTR		0x11
+ #define DRM_AMDGPU_WAIT_FENCES		0x12
+ #define DRM_AMDGPU_GEM_FIND_BO          0x13
++#define DRM_AMDGPU_FREESYNC		0x14
+ 
+ #define DRM_IOCTL_AMDGPU_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_CREATE, union drm_amdgpu_gem_create)
+ #define DRM_IOCTL_AMDGPU_GEM_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_MMAP, union drm_amdgpu_gem_mmap)
+@@ -63,6 +64,7 @@
+ #define DRM_IOCTL_AMDGPU_GEM_USERPTR	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_USERPTR, struct drm_amdgpu_gem_userptr)
+ #define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
+ #define DRM_IOCTL_AMDGPU_GEM_FIND_BO      DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_FIND_BO, struct drm_amdgpu_gem_find_bo)
++#define DRM_IOCTL_AMDGPU_FREESYNC	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_FREESYNC, struct drm_amdgpu_freesync)
+ 
+ #define AMDGPU_GEM_DOMAIN_CPU		0x1
+ #define AMDGPU_GEM_DOMAIN_GTT		0x2
+@@ -708,4 +710,17 @@ struct drm_amdgpu_virtual_range {
+ 	uint64_t start;
+ 	uint64_t end;
+ };
++
++/*
++ * Definition of free sync enter and exit signals
++ * We may have more options in the future
++ */
++#define AMDGPU_FREESYNC_FULLSCREEN_ENTER		1
++#define AMDGPU_FREESYNC_FULLSCREEN_EXIT  		2
++
++struct drm_amdgpu_freesync {
++        __u32 op;			/* AMDGPU_FREESYNC_FULLSCREEN_ENTER or */
++					/* AMDGPU_FREESYNC_FULLSCREEN_ENTER */
++        __u32 spare[7];
++};
+ #endif
+-- 
+2.7.4
+

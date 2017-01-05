@@ -1,0 +1,172 @@
+From f639b2e37ecdcc49b4dbaf1dedac51ecabf7e20e Mon Sep 17 00:00:00 2001
+From: Jammy Zhou <Jammy.Zhou@amd.com>
+Date: Tue, 10 Nov 2015 21:17:22 +0800
+Subject: [PATCH 038/117] amdgpu: reserve SVM range explicitly by clients (v3)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The SVM range is only used by OCL 2.0 now, and it shouldn't be
+reserved when only other clients are used. With this change:
+
+amdgpu_svm_init() should be called to reserve the SVM range
+amdgpu_svm_deinit() should be called to unreserve this range
+
+v3: fix a typo
+v2: update the unit test as well
+
+Change-Id: Ia2495c3471a0c71c6b05fd81d84d5acfaf9a0a4c
+Signed-off-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Michel Dänzer <michel.daenzer@amd.com>
+---
+ amdgpu/amdgpu.h            | 21 +++++++++++++++++++++
+ amdgpu/amdgpu_device.c     |  3 ---
+ amdgpu/amdgpu_internal.h   |  3 ---
+ amdgpu/amdgpu_vamgr.c      |  4 ++--
+ tests/amdgpu/basic_tests.c | 14 ++++++++++++++
+ 5 files changed, 37 insertions(+), 8 deletions(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 79314fb..1db47c3 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -1240,6 +1240,27 @@ int amdgpu_bo_va_op(amdgpu_bo_handle bo,
+ 		    uint32_t ops);
+ 
+ /**
++ * Reserve the virtual address range for SVM support
++ *
++ * \param amdgpu_device_handle
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++*/
++int amdgpu_svm_init(amdgpu_device_handle dev);
++
++/**
++ * Free the virtual address range for SVM support
++ *
++ * \param amdgpu_device_handle
++ *
++ * \return
++ *
++*/
++void amdgpu_svm_deinit(amdgpu_device_handle dev);
++
++/**
+  *  Commit SVM allocation in a process
+  *
+  * \param va_range_handle - \c [in] Handle of SVM allocation
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index b1a7182..b517b1a 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -130,7 +130,6 @@ static int amdgpu_get_auth(int fd, int *auth)
+ 
+ static void amdgpu_device_free_internal(amdgpu_device_handle dev)
+ {
+-	amdgpu_svm_vamgr_deinit(dev);
+ 	amdgpu_vamgr_deinit(&dev->vamgr_32);
+ 	amdgpu_vamgr_deinit(&dev->vamgr);
+ 	util_hash_table_destroy(dev->bo_flink_names);
+@@ -267,8 +266,6 @@ int amdgpu_device_initialize(int fd,
+ 	amdgpu_vamgr_init(&dev->vamgr_32, start, max,
+ 			  dev->dev_info.virtual_address_alignment);
+ 
+-	amdgpu_svm_vamgr_init(dev);
+-
+ 	*major_version = dev->major_version;
+ 	*minor_version = dev->minor_version;
+ 	*device_handle = dev;
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index caec2a2..3760f94 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -153,9 +153,6 @@ amdgpu_vamgr_find_va(struct amdgpu_bo_va_mgr *mgr, uint64_t size,
+ drm_private void
+ amdgpu_vamgr_free_va(struct amdgpu_bo_va_mgr *mgr, uint64_t va, uint64_t size);
+ 
+-int amdgpu_svm_vamgr_init(struct amdgpu_device *dev);
+-void amdgpu_svm_vamgr_deinit(struct amdgpu_device *dev);
+-
+ drm_private int amdgpu_query_gpu_info_init(amdgpu_device_handle dev);
+ 
+ drm_private uint64_t amdgpu_cs_calculate_timeout(uint64_t timeout);
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index 64a3543..973274d 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -317,7 +317,7 @@ int amdgpu_va_range_free(amdgpu_va_handle va_range_handle)
+  *          <0 - Negative POSIX Error code
+  *
+  */
+-int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
++int amdgpu_svm_init(amdgpu_device_handle dev)
+ {
+ 	uint64_t start;
+ 	uint64_t end;
+@@ -401,7 +401,7 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 	return ret;
+ }
+ 
+-void amdgpu_svm_vamgr_deinit(struct amdgpu_device *dev)
++void amdgpu_svm_deinit(amdgpu_device_handle dev)
+ {
+ 	if (atomic_dec_and_test(&vamgr_svm.refcount)) {
+ 		/* This is the last device referencing SVM. */
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index ec68dac..408a432 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -1265,6 +1265,9 @@ static void amdgpu_svm_test(void)
+ 	uint64_t end;
+ 	int i;
+ 
++	r = amdgpu_svm_init(device_handle);
++	CU_ASSERT_EQUAL(r, 0);
++
+ 	r = amdgpu_va_range_query(device_handle,
+ 		amdgpu_gpu_va_range_svm, &start, &end);
+ 	CU_ASSERT_EQUAL(r, 0);
+@@ -1299,6 +1302,8 @@ static void amdgpu_svm_test(void)
+ 		r = amdgpu_va_range_free(va_handle[i]);
+ 		CU_ASSERT_EQUAL(r, 0);
+ 	}
++
++	amdgpu_svm_deinit(device_handle);
+ }
+ 
+ static void amdgpu_multi_svm_test(void)
+@@ -1315,11 +1320,17 @@ static void amdgpu_multi_svm_test(void)
+ 	device_handles[0] = device_handle;
+ 	num_devices = amdgpu_num_devices();
+ 
++	r = amdgpu_svm_init(device_handles[0]);
++	CU_ASSERT_EQUAL(r, 0);
++
+ 	for (i = 1; i < num_devices; i++)
+ 		if (drm_amdgpu[i] > 0) {
+ 			r = amdgpu_device_initialize(drm_amdgpu[i], &major_version,
+ 					&minor_version, &device_handles[i]);
+ 			CU_ASSERT_EQUAL(r, 0);
++
++			r = amdgpu_svm_init(device_handles[i]);
++			CU_ASSERT_EQUAL(r, 0);
+ 		}
+ 
+ 	amdgpu_vprintf("\n");
+@@ -1362,7 +1373,10 @@ static void amdgpu_multi_svm_test(void)
+ 
+ 	for (i = 1; i < num_devices; i++)
+ 		if (drm_amdgpu[i] > 0) {
++			amdgpu_svm_deinit(device_handles[i]);
+ 			r = amdgpu_device_deinitialize(device_handles[i]);
+ 			CU_ASSERT_EQUAL(r, 0);
+ 		}
++
++	amdgpu_svm_deinit(device_handles[0]);
+ }
+-- 
+2.7.4
+

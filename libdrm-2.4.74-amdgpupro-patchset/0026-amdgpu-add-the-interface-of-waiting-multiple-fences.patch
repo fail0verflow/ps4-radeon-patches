@@ -1,0 +1,188 @@
+From 30da7e6ac1682b5de547686369d1b8199c6929c3 Mon Sep 17 00:00:00 2001
+From: Junwei Zhang <Jerry.Zhang@amd.com>
+Date: Wed, 19 Aug 2015 17:39:37 +0800
+Subject: [PATCH 026/117] amdgpu: add the interface of waiting multiple fences
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Junwei Zhang <Jerry.Zhang@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+---
+ amdgpu/amdgpu.h          | 22 +++++++++++++++
+ amdgpu/amdgpu_cs.c       | 72 ++++++++++++++++++++++++++++++++++++++++++++++++
+ include/drm/amdgpu_drm.h | 27 ++++++++++++++++++
+ 3 files changed, 121 insertions(+)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 0851306..8822a0c 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -907,6 +907,28 @@ int amdgpu_cs_query_fence_status(struct amdgpu_cs_fence *fence,
+ 				 uint64_t flags,
+ 				 uint32_t *expired);
+ 
++/**
++ *  Wait for multiple fences
++ *
++ * \param   fences      - \c [in] The fence array to wait
++ * \param   fence_count - \c [in] The fence count
++ * \param   wait_all    - \c [in] If true, wait all fences to be signaled,
++ *                                otherwise, wait at least one fence
++ * \param   timeout_ns  - \c [in] The timeout to wait, in nanoseconds
++ * \param   status      - \c [out] '1' for signaled, '0' for timeout
++ *
++ * \return  0 on success
++ *          <0 - Negative POSIX Error code
++ *
++ * \note    Currently it supports only one amdgpu_device. All fences come from
++ *          the same amdgpu_device with the same fd.
++*/
++int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
++			  uint32_t fence_count,
++			  bool wait_all,
++			  uint64_t timeout_ns,
++			  uint32_t *status);
++
+ /*
+  * Query / Info API
+  *
+diff --git a/amdgpu/amdgpu_cs.c b/amdgpu/amdgpu_cs.c
+index b4f41b0..896352b 100644
+--- a/amdgpu/amdgpu_cs.c
++++ b/amdgpu/amdgpu_cs.c
+@@ -435,6 +435,78 @@ int amdgpu_cs_query_fence_status(struct amdgpu_cs_fence *fence,
+ 	return r;
+ }
+ 
++static int amdgpu_ioctl_wait_fences(struct amdgpu_cs_fence *fences,
++				    uint32_t fence_count,
++				    bool wait_all,
++				    uint64_t timeout_ns,
++				    uint32_t *status)
++{
++	struct drm_amdgpu_fence *drm_fences;
++	amdgpu_device_handle dev = fences[0].context->dev;
++	union drm_amdgpu_wait_fences args;
++	int r;
++	uint32_t i;
++
++	drm_fences = alloca(sizeof(struct drm_amdgpu_fence) * fence_count);
++	for (i = 0; i < fence_count; i++) {
++		drm_fences[i].ctx_id = fences[i].context->id;
++		drm_fences[i].ip_type = fences[i].ip_type;
++		drm_fences[i].ip_instance = fences[i].ip_instance;
++		drm_fences[i].ring = fences[i].ring;
++		drm_fences[i].seq_no = fences[i].fence;
++	}
++
++	memset(&args, 0, sizeof(args));
++	args.in.fences = (uint64_t)(uintptr_t)drm_fences;
++	args.in.fence_count = fence_count;
++	args.in.wait_all = wait_all;
++	args.in.timeout_ns = amdgpu_cs_calculate_timeout(timeout_ns);
++
++	r = drmIoctl(dev->fd, DRM_IOCTL_AMDGPU_WAIT_FENCES, &args);
++	if (r)
++		return -errno;
++
++	*status = args.out.status;
++	return 0;
++}
++
++int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
++			  uint32_t fence_count,
++			  bool wait_all,
++			  uint64_t timeout_ns,
++			  uint32_t *status)
++{
++	uint32_t ioctl_status = 0;
++	uint32_t i;
++	int r;
++
++	/* Sanity check */
++	if (NULL == fences)
++		return -EINVAL;
++	if (NULL == status)
++		return -EINVAL;
++	if (fence_count <= 0)
++		return -EINVAL;
++	for (i = 0; i < fence_count; i++) {
++		if (NULL == fences[i].context)
++			return -EINVAL;
++		if (fences[i].ip_type >= AMDGPU_HW_IP_NUM)
++			return -EINVAL;
++		if (fences[i].ring >= AMDGPU_CS_MAX_RINGS)
++			return -EINVAL;
++	}
++
++	*status = 0;
++
++	r = amdgpu_ioctl_wait_fences(fences, fence_count, wait_all, timeout_ns,
++					&ioctl_status);
++
++	if (!r)
++		*status = ioctl_status;
++
++	return r;
++}
++
+ int amdgpu_cs_create_semaphore(amdgpu_semaphore_handle *sem)
+ {
+ 	struct amdgpu_semaphore *gpu_semaphore;
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index fbdd118..2cbea72 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -46,6 +46,7 @@
+ #define DRM_AMDGPU_WAIT_CS		0x09
+ #define DRM_AMDGPU_GEM_OP		0x10
+ #define DRM_AMDGPU_GEM_USERPTR		0x11
++#define DRM_AMDGPU_WAIT_FENCES		0x12
+ 
+ #define DRM_IOCTL_AMDGPU_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_CREATE, union drm_amdgpu_gem_create)
+ #define DRM_IOCTL_AMDGPU_GEM_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_MMAP, union drm_amdgpu_gem_mmap)
+@@ -59,6 +60,7 @@
+ #define DRM_IOCTL_AMDGPU_WAIT_CS	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_CS, union drm_amdgpu_wait_cs)
+ #define DRM_IOCTL_AMDGPU_GEM_OP		DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_OP, struct drm_amdgpu_gem_op)
+ #define DRM_IOCTL_AMDGPU_GEM_USERPTR	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_USERPTR, struct drm_amdgpu_gem_userptr)
++#define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
+ 
+ #define AMDGPU_GEM_DOMAIN_CPU		0x1
+ #define AMDGPU_GEM_DOMAIN_GTT		0x2
+@@ -297,6 +299,31 @@ union drm_amdgpu_wait_cs {
+ 	struct drm_amdgpu_wait_cs_out out;
+ };
+ 
++struct drm_amdgpu_fence {
++	uint32_t ctx_id;
++	uint32_t ip_type;
++	uint32_t ip_instance;
++	uint32_t ring;
++	uint64_t seq_no;
++};
++
++struct drm_amdgpu_wait_fences_in {
++	/** This points to uint64_t * which points to fences */
++	uint64_t fences;
++	uint32_t fence_count;
++	uint32_t wait_all;
++	uint64_t timeout_ns;
++};
++
++struct drm_amdgpu_wait_fences_out {
++	uint64_t status;
++};
++
++union drm_amdgpu_wait_fences {
++	struct drm_amdgpu_wait_fences_in in;
++	struct drm_amdgpu_wait_fences_out out;
++};
++
+ #define AMDGPU_GEM_OP_GET_GEM_CREATE_INFO	0
+ #define AMDGPU_GEM_OP_SET_PLACEMENT		1
+ 
+-- 
+2.7.4
+

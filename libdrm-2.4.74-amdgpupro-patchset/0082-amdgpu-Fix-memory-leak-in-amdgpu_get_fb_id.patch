@@ -1,0 +1,39 @@
+From 3edba3d8135eb76e45d6cac2681414a2af790b0c Mon Sep 17 00:00:00 2001
+From: jqdeng <Emily.Deng@amd.com>
+Date: Thu, 14 Jul 2016 17:33:13 +0800
+Subject: [PATCH 082/117] amdgpu: Fix memory leak in amdgpu_get_fb_id
+
+Signed-off-by: jqdeng <Emily.Deng@amd.com>
+Reviewed-by: Jim Qu <Jim.Qu@amd.com>
+---
+ amdgpu/amdgpu_bo.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index f311b94..ebfb7cf 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -454,13 +454,17 @@ int amdgpu_get_fb_id(amdgpu_device_handle dev, unsigned int *fb_id)
+ 	count_crtcs = mode_res->count_crtcs;
+ 	for (i = 0; i < mode_res->count_crtcs; i++) {
+ 		mode_crtc = drmModeGetCrtc(fd, mode_res->crtcs[i]);
+-		if (mode_crtc->buffer_id) {
+-			current_id = mode_crtc->buffer_id;
+-			if (current_id != NULL)
++		if (mode_crtc) {
++			if (mode_crtc->buffer_id) {
++				current_id = mode_crtc->buffer_id;
++				drmModeFreeCrtc(mode_crtc);
+ 				break;
++			}
++			drmModeFreeCrtc(mode_crtc);
+ 		}
+ 	}
+ 	*fb_id = current_id;
++	drmModeFreeResources(mode_res);
+ 
+ 	return r;
+ }
+-- 
+2.7.4
+

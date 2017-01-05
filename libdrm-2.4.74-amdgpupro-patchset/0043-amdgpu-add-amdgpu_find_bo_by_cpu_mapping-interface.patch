@@ -1,0 +1,143 @@
+From c8b1ce6872eaf7793065b0e4ed308b2a92032f95 Mon Sep 17 00:00:00 2001
+From: Chunming Zhou <David1.Zhou@amd.com>
+Date: Thu, 26 Nov 2015 17:01:07 +0800
+Subject: [PATCH 043/117] amdgpu: add amdgpu_find_bo_by_cpu_mapping interface
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+userspace needs to know if the user memory is from BO or malloc.
+
+Change-Id: Ie2dbc13f1c02bc0a996f64f9db83a21da63c1d70
+Signed-off-by: Chunming Zhou <David1.Zhou@amd.com>
+Reviewed-by: Jammy Zhou <Jammy.Zhou@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu.h          | 24 ++++++++++++++++++++++++
+ amdgpu/amdgpu_bo.c       | 37 +++++++++++++++++++++++++++++++++++++
+ include/drm/amdgpu_drm.h | 12 ++++++++++++
+ 3 files changed, 73 insertions(+)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index baae113..4925056 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -672,6 +672,30 @@ int amdgpu_create_bo_from_user_mem(amdgpu_device_handle dev,
+ 				    amdgpu_bo_handle *buf_handle);
+ 
+ /**
++ * Validate if the user memory comes from BO
++ *
++ * \param dev - [in] Device handle. See #amdgpu_device_initialize()
++ * \param cpu - [in] CPU address of user allocated memory which we
++ * want to map to GPU address space (make GPU accessible)
++ * (This address must be correctly aligned).
++ * \param size - [in] Size of allocation (must be correctly aligned)
++ * \param buf_handle - [out] Buffer handle for the userptr memory
++ * if the user memory is not from BO, the buf_handle will be NULL.
++ * \param offset_in_bo - [out] offset in this BO for this user memory
++ *
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX Error code
++ *
++*/
++int amdgpu_find_bo_by_cpu_mapping(amdgpu_device_handle dev,
++				  void *cpu,
++				  uint64_t size,
++				  amdgpu_bo_handle *buf_handle,
++				  uint64_t *offset_in_bo);
++
++
++/**
+  * Free previosuly allocated memory
+  *
+  * \param   dev	       - \c [in] Device handle. See #amdgpu_device_initialize()
+diff --git a/amdgpu/amdgpu_bo.c b/amdgpu/amdgpu_bo.c
+index d30fd1e..ff78039 100644
+--- a/amdgpu/amdgpu_bo.c
++++ b/amdgpu/amdgpu_bo.c
+@@ -529,6 +529,43 @@ int amdgpu_bo_wait_for_idle(amdgpu_bo_handle bo,
+ 	}
+ }
+ 
++int amdgpu_find_bo_by_cpu_mapping(amdgpu_device_handle dev,
++				  void *cpu,
++				  uint64_t size,
++				  amdgpu_bo_handle *buf_handle,
++				  uint64_t *offset_in_bo)
++{
++	int r;
++	struct amdgpu_bo *bo;
++	struct drm_amdgpu_gem_find_bo args;
++
++	args.addr = (uintptr_t)cpu;
++	args.size = size;
++	r = drmCommandWriteRead(dev->fd, DRM_AMDGPU_GEM_FIND_BO,
++				&args, sizeof(args));
++	if (r)
++		return r;
++	if (args.handle == 0)
++		return -EINVAL;
++	bo = util_hash_table_get(dev->bo_handles,
++				 (void*)(uintptr_t)args.handle);
++	if (!bo) {
++		bo = calloc(1, sizeof(struct amdgpu_bo));
++		if (!bo)
++			return -ENOMEM;
++		atomic_set(&bo->refcount, 1);
++		bo->dev = dev;
++		bo->alloc_size = size;
++		bo->handle = args.handle;
++	} else
++		atomic_inc(&bo->refcount);
++
++	*buf_handle = bo;
++	*offset_in_bo = args.offset;
++	return r;
++}
++
++
+ int amdgpu_create_bo_from_user_mem(amdgpu_device_handle dev,
+ 				    void *cpu,
+ 				    uint64_t size,
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 050e7fe..e07904c 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -47,6 +47,7 @@
+ #define DRM_AMDGPU_GEM_OP		0x10
+ #define DRM_AMDGPU_GEM_USERPTR		0x11
+ #define DRM_AMDGPU_WAIT_FENCES		0x12
++#define DRM_AMDGPU_GEM_FIND_BO          0x13
+ 
+ #define DRM_IOCTL_AMDGPU_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_CREATE, union drm_amdgpu_gem_create)
+ #define DRM_IOCTL_AMDGPU_GEM_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_MMAP, union drm_amdgpu_gem_mmap)
+@@ -61,6 +62,7 @@
+ #define DRM_IOCTL_AMDGPU_GEM_OP		DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_OP, struct drm_amdgpu_gem_op)
+ #define DRM_IOCTL_AMDGPU_GEM_USERPTR	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_USERPTR, struct drm_amdgpu_gem_userptr)
+ #define DRM_IOCTL_AMDGPU_WAIT_FENCES	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_WAIT_FENCES, union drm_amdgpu_wait_fences)
++#define DRM_IOCTL_AMDGPU_GEM_FIND_BO      DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_FIND_BO, struct drm_amdgpu_gem_find_bo)
+ 
+ #define AMDGPU_GEM_DOMAIN_CPU		0x1
+ #define AMDGPU_GEM_DOMAIN_GTT		0x2
+@@ -201,6 +203,16 @@ struct drm_amdgpu_gem_userptr {
+ 	uint32_t		handle;
+ };
+ 
++struct drm_amdgpu_gem_find_bo {
++       uint64_t                addr;
++       uint64_t                size;
++       uint32_t                flags;
++       /* Resulting GEM handle */
++       uint32_t                handle;
++       /* offset in bo */
++       uint64_t                offset;
++};
++
+ /* same meaning as the GB_TILE_MODE and GL_MACRO_TILE_MODE fields */
+ #define AMDGPU_TILING_ARRAY_MODE_SHIFT			0
+ #define AMDGPU_TILING_ARRAY_MODE_MASK			0xf
+-- 
+2.7.4
+

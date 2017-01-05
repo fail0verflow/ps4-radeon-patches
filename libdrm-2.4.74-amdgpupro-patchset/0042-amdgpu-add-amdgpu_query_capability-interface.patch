@@ -1,0 +1,98 @@
+From 8b7c227c3cb6429e2c53fd8375c415021626886d Mon Sep 17 00:00:00 2001
+From: Chunming Zhou <David1.Zhou@amd.com>
+Date: Mon, 16 Nov 2015 18:06:16 +0800
+Subject: [PATCH 042/117] amdgpu: add amdgpu_query_capability interface
+
+Change-Id: Iffdd157e411c19f4d9980994dad6952b183ef1a5
+Signed-off-by: Chunming Zhou <David1.Zhou@amd.com>
+Reviewed-by: Jim Qu <Jim.Qu@amd.com>
+---
+ amdgpu/amdgpu.h          | 18 ++++++++++++++++++
+ amdgpu/amdgpu_gpu_info.c |  6 ++++++
+ include/drm/amdgpu_drm.h |  8 +++-----
+ 3 files changed, 27 insertions(+), 5 deletions(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 1db47c3..baae113 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -62,6 +62,11 @@ struct drm_amdgpu_info_hw_ip;
+  */
+ #define AMDGPU_QUERY_FENCE_TIMEOUT_IS_ABSOLUTE     (1 << 0)
+ 
++/**
++ * Used in amdgpu_query_capability(), meaning if pin feature is enabled.
++ */
++#define AMDGPU_CAP_PIN_MEM  (1 << 0)
++
+ /*--------------------------------------------------------------------------*/
+ /* ----------------------------- Enums ------------------------------------ */
+ /*--------------------------------------------------------------------------*/
+@@ -1070,6 +1075,19 @@ int amdgpu_query_info(amdgpu_device_handle dev, unsigned info_id,
+ 		      unsigned size, void *value);
+ 
+ /**
++ * Query hardware or driver capabilities.
++ *
++ *
++ * \param   dev     - \c [in] Device handle. See #amdgpu_device_initialize()
++ * \param   value   - \c [out] Pointer to the return value.
++ *
++ * \return   0 on success\n
++ *          <0 - Negative POSIX error code
++ *
++*/
++int amdgpu_query_capability(amdgpu_device_handle dev, uint64_t *value);
++
++/**
+  * Query information about GDS
+  *
+  * \param   dev	     - \c [in] Device handle. See #amdgpu_device_initialize()
+diff --git a/amdgpu/amdgpu_gpu_info.c b/amdgpu/amdgpu_gpu_info.c
+index 73d8d11..133952d 100644
+--- a/amdgpu/amdgpu_gpu_info.c
++++ b/amdgpu/amdgpu_gpu_info.c
+@@ -48,6 +48,12 @@ int amdgpu_query_info(amdgpu_device_handle dev, unsigned info_id,
+ 			       sizeof(struct drm_amdgpu_info));
+ }
+ 
++int amdgpu_query_capability(amdgpu_device_handle dev, uint64_t *value)
++{
++	return amdgpu_query_info(dev, AMDGPU_INFO_CAPABILITY,
++				  sizeof(uint64_t), value);
++}
++
+ int amdgpu_query_crtc_from_id(amdgpu_device_handle dev, unsigned id,
+ 			      int32_t *result)
+ {
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index 4ddb649..050e7fe 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -508,10 +508,11 @@ struct drm_amdgpu_cs_chunk_data {
+ #define AMDGPU_INFO_VIS_VRAM_USAGE		0x17
+ /* virtual range */
+ #define AMDGPU_INFO_VIRTUAL_RANGE		0x18
++
+ /* gpu capability */
+ #define AMDGPU_INFO_CAPABILITY			0x50
+-	/* query pin memory capability */
+-	#define AMDGPU_INFO_CAPABILITY_PIN_MEM	0x01
++/* query pin memory capability */
++#define AMDGPU_CAPABILITY_PIN_MEM_FLAG  (1 << 0)
+ 
+ #define AMDGPU_INFO_MMR_SE_INDEX_SHIFT	0
+ #define AMDGPU_INFO_MMR_SE_INDEX_MASK	0xff
+@@ -574,9 +575,6 @@ struct drm_amdgpu_info {
+ 			uint32_t _pad;
+ 		} virtual_range;
+ 
+-		struct {
+-			uint64_t type;
+-		} query_capability;
+ 	};
+ };
+ 
+-- 
+2.7.4
+

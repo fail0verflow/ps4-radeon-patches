@@ -1,0 +1,84 @@
+From 98342e54c0e8d290a70bfea2b0631169ea414787 Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 3 Nov 2015 15:46:33 -0500
+Subject: [PATCH 035/117] amdgpu: vamgr_32 can be a struct instead of a pointer
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+vamgr_32 is an integral part of amdgpu_device. We don't need to callac and free it.
+This can save CPU time. Reduce heap fragment.
+
+Change-Id: I7b5797058e68d0b4c12705d628d32a996b2f3644
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu_device.c   | 8 ++------
+ amdgpu/amdgpu_internal.h | 2 +-
+ amdgpu/amdgpu_vamgr.c    | 4 ++--
+ 3 files changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index a58a9d4..259c1cc 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -131,8 +131,7 @@ static int amdgpu_get_auth(int fd, int *auth)
+ static void amdgpu_device_free_internal(amdgpu_device_handle dev)
+ {
+ 	amdgpu_svm_vamgr_deinit(dev);
+-	amdgpu_vamgr_deinit(dev->vamgr_32);
+-	free(dev->vamgr_32);
++	amdgpu_vamgr_deinit(&dev->vamgr_32);
+ 	amdgpu_vamgr_deinit(dev->vamgr);
+ 	free(dev->vamgr);
+ 	util_hash_table_destroy(dev->bo_flink_names);
+@@ -270,10 +269,7 @@ int amdgpu_device_initialize(int fd,
+ 	if (start > 0xffffffff)
+ 		goto free_va; /* shouldn't get here */
+ 
+-	dev->vamgr_32 =  calloc(1, sizeof(struct amdgpu_bo_va_mgr));
+-	if (dev->vamgr_32 == NULL)
+-		goto free_va;
+-	amdgpu_vamgr_init(dev->vamgr_32, start, max,
++	amdgpu_vamgr_init(&dev->vamgr_32, start, max,
+ 			  dev->dev_info.virtual_address_alignment);
+ 
+ 	amdgpu_svm_vamgr_init(dev);
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index 0506853..892b467 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -91,7 +91,7 @@ struct amdgpu_device {
+ 	/** The global VA manager for the whole virtual address space */
+ 	struct amdgpu_bo_va_mgr *vamgr;
+ 	/** The VA manager for the 32bit address space */
+-	struct amdgpu_bo_va_mgr *vamgr_32;
++	struct amdgpu_bo_va_mgr vamgr_32;
+ };
+ 
+ struct amdgpu_bo {
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index 945b006..916eb9e 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -256,7 +256,7 @@ int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+ 			return -EINVAL;
+ 	}
+ 	else if (flags & AMDGPU_VA_RANGE_32_BIT)
+-		vamgr = dev->vamgr_32;
++		vamgr = &dev->vamgr_32;
+ 	else
+ 		vamgr = dev->vamgr;
+ 
+@@ -269,7 +269,7 @@ int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+ 	if (!(flags & AMDGPU_VA_RANGE_32_BIT) &&
+ 	    (*va_base_allocated == AMDGPU_INVALID_VA_ADDRESS)) {
+ 		/* fallback to 32bit address */
+-		vamgr = dev->vamgr_32;
++		vamgr = &dev->vamgr_32;
+ 		*va_base_allocated = amdgpu_vamgr_find_va(vamgr, size,
+ 					va_base_alignment, va_base_required);
+ 	}
+-- 
+2.7.4
+

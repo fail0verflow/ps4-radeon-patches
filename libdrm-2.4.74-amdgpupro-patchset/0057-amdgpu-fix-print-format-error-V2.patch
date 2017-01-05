@@ -1,0 +1,60 @@
+From 4dacb4b7d2f3ac211a485d088e7fcc1760af38db Mon Sep 17 00:00:00 2001
+From: Chunming Zhou <David1.Zhou@amd.com>
+Date: Mon, 28 Mar 2016 14:30:03 +0800
+Subject: [PATCH 057/117] amdgpu: fix print format error V2
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+V2: use "PRIx64" instead of llx
+
+Change-Id: Idf79d58abe165f26dc6bc900e10fca30ea740509
+Signed-off-by: Chunming Zhou <David1.Zhou@amd.com>
+Reviewed-By: Ken Wang <Qingqing.Wang@amd.com> (V1)
+Reviewed-by: Michel Dänzer <michel.daenzer@amd.com> (V2)
+
+Conflicts:
+	tests/amdgpu/basic_tests.c
+---
+ tests/amdgpu/basic_tests.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index b7e6270..f308e9a 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -28,6 +28,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
++#include <inttypes.h>
+ #ifdef HAVE_ALLOCA_H
+ # include <alloca.h>
+ #endif
+@@ -273,17 +274,17 @@ static void amdgpu_query_heap_info_test(void)
+ 	amdgpu_query_heap_info(device_handle, AMDGPU_GEM_DOMAIN_VRAM,
+ 			       AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED, &info);
+ 	amdgpu_vprintf("\n    Visible VRAM info...\n");
+-	amdgpu_vprintf("    size: 0x%x\n", info.heap_size);
+-	amdgpu_vprintf("    usage: 0x%x\n", info.heap_usage);
++	amdgpu_vprintf("    size: 0x%"PRIx64"\n", info.heap_size);
++	amdgpu_vprintf("    usage: 0x%"PRIx64"\n", info.heap_usage);
+ 	amdgpu_vprintf("\n    Invisible VRAM info...\n");
+-	amdgpu_vprintf("    size: 0x%x\n", total_vram - info.heap_size);
+-	amdgpu_vprintf("    usage: 0x%x\n", total_vram_used - info.heap_usage);
++	amdgpu_vprintf("    size: 0x%"PRIx64"\n", total_vram - info.heap_size);
++	amdgpu_vprintf("    usage: 0x%"PRIx64"\n", total_vram_used - info.heap_usage);
+ 
+ 	amdgpu_query_heap_info(device_handle, AMDGPU_GEM_DOMAIN_GTT,
+ 			       0, &info);
+ 	amdgpu_vprintf("\n    GTT info...\n");
+-	amdgpu_vprintf("    size: 0x%x\n", info.heap_size);
+-	amdgpu_vprintf("    usage: 0x%x\n", info.heap_usage);
++	amdgpu_vprintf("    size: 0x%"PRIx64"\n", info.heap_size);
++	amdgpu_vprintf("    usage: 0x%"PRIx64"\n", info.heap_usage);
+ }
+ 
+ static void amdgpu_query_info_test(void)
+-- 
+2.7.4
+

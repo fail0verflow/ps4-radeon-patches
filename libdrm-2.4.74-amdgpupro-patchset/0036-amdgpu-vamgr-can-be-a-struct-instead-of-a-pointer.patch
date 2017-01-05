@@ -1,0 +1,128 @@
+From 8326d0420e94fffc413eb9ef23de37074a20efeb Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 3 Nov 2015 15:52:57 -0500
+Subject: [PATCH 036/117] amdgpu: vamgr can be a struct instead of a pointer
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+vamgr is an integral part of amdgpu_device. We don't need to callac and free it.
+This can save CPU time. Reduce heap fragment.
+
+Change-Id: Ib5ca9e93d007370d2d746aea2c21c2f91aefa3c2
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ amdgpu/amdgpu_device.c   | 16 +++++-----------
+ amdgpu/amdgpu_internal.h |  2 +-
+ amdgpu/amdgpu_vamgr.c    | 10 +++++-----
+ 3 files changed, 11 insertions(+), 17 deletions(-)
+
+diff --git a/amdgpu/amdgpu_device.c b/amdgpu/amdgpu_device.c
+index 259c1cc..b1a7182 100644
+--- a/amdgpu/amdgpu_device.c
++++ b/amdgpu/amdgpu_device.c
+@@ -132,8 +132,7 @@ static void amdgpu_device_free_internal(amdgpu_device_handle dev)
+ {
+ 	amdgpu_svm_vamgr_deinit(dev);
+ 	amdgpu_vamgr_deinit(&dev->vamgr_32);
+-	amdgpu_vamgr_deinit(dev->vamgr);
+-	free(dev->vamgr);
++	amdgpu_vamgr_deinit(&dev->vamgr);
+ 	util_hash_table_destroy(dev->bo_flink_names);
+ 	util_hash_table_destroy(dev->bo_handles);
+ 	pthread_mutex_destroy(&dev->bo_table_mutex);
+@@ -254,16 +253,12 @@ int amdgpu_device_initialize(int fd,
+ 	if (r)
+ 		goto cleanup;
+ 
+-	dev->vamgr = calloc(1, sizeof(struct amdgpu_bo_va_mgr));
+-	if (dev->vamgr == NULL)
+-		goto cleanup;
+-
+-	amdgpu_vamgr_init(dev->vamgr, dev->dev_info.virtual_address_offset,
++	amdgpu_vamgr_init(&dev->vamgr, dev->dev_info.virtual_address_offset,
+ 			  dev->dev_info.virtual_address_max,
+ 			  dev->dev_info.virtual_address_alignment);
+ 
+ 	max = MIN2(dev->dev_info.virtual_address_max, 0xffffffff);
+-	start = amdgpu_vamgr_find_va(dev->vamgr,
++	start = amdgpu_vamgr_find_va(&dev->vamgr,
+ 				     max - dev->dev_info.virtual_address_offset,
+ 				     dev->dev_info.virtual_address_alignment, 0);
+ 	if (start > 0xffffffff)
+@@ -284,10 +279,9 @@ int amdgpu_device_initialize(int fd,
+ 
+ free_va:
+ 	r = -ENOMEM;
+-	amdgpu_vamgr_free_va(dev->vamgr, start,
++	amdgpu_vamgr_free_va(&dev->vamgr, start,
+ 			     max - dev->dev_info.virtual_address_offset);
+-	amdgpu_vamgr_deinit(dev->vamgr);
+-	free(dev->vamgr);
++	amdgpu_vamgr_deinit(&dev->vamgr);
+ 
+ cleanup:
+ 	if (dev->fd >= 0)
+diff --git a/amdgpu/amdgpu_internal.h b/amdgpu/amdgpu_internal.h
+index 892b467..caec2a2 100644
+--- a/amdgpu/amdgpu_internal.h
++++ b/amdgpu/amdgpu_internal.h
+@@ -89,7 +89,7 @@ struct amdgpu_device {
+ 	struct drm_amdgpu_info_device dev_info;
+ 	struct amdgpu_gpu_info info;
+ 	/** The global VA manager for the whole virtual address space */
+-	struct amdgpu_bo_va_mgr *vamgr;
++	struct amdgpu_bo_va_mgr vamgr;
+ 	/** The VA manager for the 32bit address space */
+ 	struct amdgpu_bo_va_mgr vamgr_32;
+ };
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index 916eb9e..64a3543 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -258,7 +258,7 @@ int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+ 	else if (flags & AMDGPU_VA_RANGE_32_BIT)
+ 		vamgr = &dev->vamgr_32;
+ 	else
+-		vamgr = dev->vamgr;
++		vamgr = &dev->vamgr;
+ 
+ 	va_base_alignment = MAX2(va_base_alignment, vamgr->va_alignment);
+ 	size = ALIGN(size, vamgr->va_alignment);
+@@ -337,7 +337,7 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 		if (!vamgr_svm.valid)
+ 			return -ENOSPC;
+ 
+-		start = amdgpu_vamgr_find_va(dev->vamgr,
++		start = amdgpu_vamgr_find_va(&dev->vamgr,
+ 			vamgr_svm.va_max - vamgr_svm.va_min,
+ 			dev->dev_info.virtual_address_alignment, vamgr_svm.va_min);
+ 
+@@ -367,7 +367,7 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 	 */
+ 	for (base_required = end - size; base_required >= min_base_required;
+ 		base_required -= step) {
+-		start = amdgpu_vamgr_find_va(dev->vamgr, size,
++		start = amdgpu_vamgr_find_va(&dev->vamgr, size,
+ 						dev->dev_info.virtual_address_alignment, base_required);
+ 		if (start != base_required)
+ 			continue;
+@@ -384,12 +384,12 @@ int amdgpu_svm_vamgr_init(struct amdgpu_device *dev)
+ 			/* Probably there is no space in this process's address space for
+ 			   such size of SVM range. This is very rare for 64 bit CPU.
+ 			*/
+-			amdgpu_vamgr_free_va(dev->vamgr, start, size);
++			amdgpu_vamgr_free_va(&dev->vamgr, start, size);
+ 			ret = -ENOMEM;
+ 			break;
+ 		} else { /* cpu_address != (void *)start */
+ 			/* This CPU VM address (start) is not available*/
+-			amdgpu_vamgr_free_va(dev->vamgr, start, size);
++			amdgpu_vamgr_free_va(&dev->vamgr, start, size);
+ 			munmap(cpu_address, size);
+ 			base_required -= step;
+ 		}
+-- 
+2.7.4
+

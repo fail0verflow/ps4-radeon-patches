@@ -1,0 +1,86 @@
+From 7e00543c422f00a68edb4227eeb56ba48175b399 Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Thu, 11 Aug 2016 15:23:35 +0800
+Subject: [PATCH 114/117] amdgpu: add more capability query
+
+Change-Id: Ia77feea215a4eb7d0e41684fa5c9e44eedf7feb8
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+---
+ amdgpu/amdgpu.h          |  4 +++-
+ amdgpu/amdgpu_gpu_info.c |  5 +++--
+ include/drm/amdgpu_drm.h | 12 ++++++++++--
+ 3 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/amdgpu/amdgpu.h b/amdgpu/amdgpu.h
+index 08593ca..763a3a6 100644
+--- a/amdgpu/amdgpu.h
++++ b/amdgpu/amdgpu.h
+@@ -38,6 +38,7 @@
+ #include <stdbool.h>
+ 
+ struct drm_amdgpu_info_hw_ip;
++struct drm_amdgpu_capability;
+ 
+ /*--------------------------------------------------------------------------*/
+ /* --------------------------- Defines ------------------------------------ */
+@@ -1155,7 +1156,8 @@ int amdgpu_query_info(amdgpu_device_handle dev, unsigned info_id,
+  *          <0 - Negative POSIX error code
+  *
+ */
+-int amdgpu_query_capability(amdgpu_device_handle dev, uint64_t *value);
++int amdgpu_query_capability(amdgpu_device_handle dev,
++			     struct drm_amdgpu_capability *cap);
+ 
+ /**
+  * Query information about GDS
+diff --git a/amdgpu/amdgpu_gpu_info.c b/amdgpu/amdgpu_gpu_info.c
+index 037df32..406baf2 100644
+--- a/amdgpu/amdgpu_gpu_info.c
++++ b/amdgpu/amdgpu_gpu_info.c
+@@ -48,10 +48,11 @@ int amdgpu_query_info(amdgpu_device_handle dev, unsigned info_id,
+ 			       sizeof(struct drm_amdgpu_info));
+ }
+ 
+-int amdgpu_query_capability(amdgpu_device_handle dev, uint64_t *value)
++int amdgpu_query_capability(amdgpu_device_handle dev,
++			     struct drm_amdgpu_capability *cap)
+ {
+ 	return amdgpu_query_info(dev, AMDGPU_INFO_CAPABILITY,
+-				  sizeof(uint64_t), value);
++				  sizeof(struct drm_amdgpu_capability), cap);
+ }
+ 
+ int amdgpu_query_crtc_from_id(amdgpu_device_handle dev, unsigned id,
+diff --git a/include/drm/amdgpu_drm.h b/include/drm/amdgpu_drm.h
+index cda8f36..14d800e 100644
+--- a/include/drm/amdgpu_drm.h
++++ b/include/drm/amdgpu_drm.h
+@@ -530,8 +530,6 @@ struct drm_amdgpu_cs_chunk_data {
+ 
+ /* gpu capability */
+ #define AMDGPU_INFO_CAPABILITY			0x50
+-/* query pin memory capability */
+-#define AMDGPU_CAPABILITY_PIN_MEM_FLAG  (1 << 0)
+ 
+ #define AMDGPU_INFO_MMR_SE_INDEX_SHIFT	0
+ #define AMDGPU_INFO_MMR_SE_INDEX_MASK	0xff
+@@ -713,6 +711,16 @@ struct drm_amdgpu_virtual_range {
+ 	uint64_t end;
+ };
+ 
++/* query pin memory capability */
++#define AMDGPU_CAPABILITY_PIN_MEM_FLAG		(1 << 0)
++/* query direct gma capability */
++#define AMDGPU_CAPABILITY_DIRECT_GMA_FLAG	(1 << 1)
++
++struct drm_amdgpu_capability {
++	uint32_t flag;
++	uint32_t direct_gma_size;
++};
++
+ /*
+  * Definition of free sync enter and exit signals
+  * We may have more options in the future
+-- 
+2.7.4
+

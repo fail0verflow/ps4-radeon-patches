@@ -1,0 +1,36 @@
+From 7508b82630fc31ab2f02e3613747da3a64e05f60 Mon Sep 17 00:00:00 2001
+From: Ken Wang <Qingqing.Wang@amd.com>
+Date: Thu, 30 Jun 2016 11:19:08 +0800
+Subject: [PATCH 074/117] drm: fix a bug in va range allocation
+
+Change-Id: Ic038990a14096ff12e3f309f68fd47d057d6bedd
+Signed-off-by: David Mao <david.mao@amd.com>
+Reviewed-by: Ken Wang <Qingqing.Wang@amd.com>
+---
+ amdgpu/amdgpu_vamgr.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/amdgpu/amdgpu_vamgr.c b/amdgpu/amdgpu_vamgr.c
+index f3e38f6..1518b7a 100644
+--- a/amdgpu/amdgpu_vamgr.c
++++ b/amdgpu/amdgpu_vamgr.c
+@@ -201,11 +201,15 @@ static uint64_t amdgpu_vamgr_find_va_in_range(struct amdgpu_bo_va_mgr *mgr, uint
+ 		waste = waste ? alignment - waste : 0;
+ 		offset += waste;
+ 		/* the gap between the range_min and hole->offset need to be covered as well */
+-		waste += offset - hole->offset;
++		waste = offset - hole->offset;
+ 		if (offset >= (hole->offset + hole->size)) {
+ 			continue;
+ 		}
+ 
++		if (offset + size > range_max) {
++			continue;
++		}
++
+ 		if (!waste && hole->size == size) {
+ 			offset = hole->offset;
+ 			list_del(&hole->list);
+-- 
+2.7.4
+

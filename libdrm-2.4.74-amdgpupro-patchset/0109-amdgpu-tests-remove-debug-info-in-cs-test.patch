@@ -1,0 +1,30 @@
+From 51f97fee7269b84d498899fac0a1649131c3d5cc Mon Sep 17 00:00:00 2001
+From: Junwei Zhang <Jerry.Zhang@amd.com>
+Date: Wed, 10 Aug 2016 15:16:43 +0800
+Subject: [PATCH 109/117] amdgpu/tests: remove debug info in cs test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Change-Id: Ic11256fe3f8fd6d80f4eefc85b9ea0ba665dc4fe
+Signed-off-by: Junwei Zhang <Jerry.Zhang@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+---
+ tests/amdgpu/cs_tests.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/tests/amdgpu/cs_tests.c b/tests/amdgpu/cs_tests.c
+index 6c4a915..ca741b7 100644
+--- a/tests/amdgpu/cs_tests.c
++++ b/tests/amdgpu/cs_tests.c
+@@ -211,7 +211,6 @@ static void amdgpu_cs_uvd_create(void)
+ 		if (chip_id == chip_rev+0x50 || chip_id == chip_rev+0x5A
+ 				|| chip_id == chip_rev+0x64) {
+ 			/* dpb size */
+-			printf("===> chip_rev = %d, chip_id = 0x%x\n", chip_rev, chip_id);
+ 			((uint8_t*)msg)[0x28] = 0x00;
+ 			((uint8_t*)msg)[0x29] = 0x94;
+ 			((uint8_t*)msg)[0x2A] = 0x6B;
+-- 
+2.7.4
+

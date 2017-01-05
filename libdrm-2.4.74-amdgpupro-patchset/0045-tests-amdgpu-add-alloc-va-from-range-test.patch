@@ -1,0 +1,91 @@
+From 9622440df581fd23d8dbf5fb2188b1fdad524b6f Mon Sep 17 00:00:00 2001
+From: Flora Cui <Flora.Cui@amd.com>
+Date: Thu, 4 Feb 2016 09:54:32 +0800
+Subject: [PATCH 045/117] tests/amdgpu: add alloc va from range test
+
+Change-Id: I22fa0255ad8f0b7e881a6d4d2de6a054ce3572db
+Signed-off-by: Flora Cui <Flora.Cui@amd.com>
+Reviewed-by: Ken Wang <Qingqing.Wang@amd.com>
+---
+ tests/amdgpu/basic_tests.c | 54 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index 408a432..78388a9 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -51,6 +51,7 @@ static void amdgpu_userptr_test(void);
+ static void amdgpu_semaphore_test(void);
+ static void amdgpu_svm_test(void);
+ static void amdgpu_multi_svm_test(void);
++static void amdgpu_va_range_test(void);
+ 
+ CU_TestInfo basic_tests[] = {
+ 	{ "Query Info Test",  amdgpu_query_info_test },
+@@ -63,6 +64,7 @@ CU_TestInfo basic_tests[] = {
+ 	{ "SW semaphore Test",  amdgpu_semaphore_test },
+ 	{ "SVM Test", amdgpu_svm_test },
+ 	{ "SVM Test (multi-GPUs)", amdgpu_multi_svm_test },
++	{ "VA range Test", amdgpu_va_range_test},
+ 	CU_TEST_INFO_NULL,
+ };
+ #define BUFFER_SIZE (8 * 1024)
+@@ -1380,3 +1382,55 @@ static void amdgpu_multi_svm_test(void)
+ 
+ 	amdgpu_svm_deinit(device_handles[0]);
+ }
++
++#define VA_RANGE_TEST_CNT 66
++#define VA_RANGE_TEST_INT_BEL_CNT 20
++#define VA_RANGE_TEST_INT_ABO_CNT 20
++static void amdgpu_va_range_test(void)
++{
++	amdgpu_va_handle va_handles[VA_RANGE_TEST_CNT+VA_RANGE_TEST_INT_BEL_CNT+VA_RANGE_TEST_INT_ABO_CNT];
++	uint64_t va;
++	int i, r;
++
++	amdgpu_vprintf("\n");
++	amdgpu_vprintf("    Testing to alloc and free VA in user defined range.\n");
++	memset(va_handles, 0, sizeof(va_handles));
++	for (i = 0; i < VA_RANGE_TEST_CNT; i++) {
++		r = amdgpu_va_range_alloc_in_range(device_handle,
++						amdgpu_gpu_va_range_general,
++						0x1000000, 9, 0,
++						0x800000000, 0x840000000,
++						&va, &va_handles[i], 0);
++		amdgpu_vprintf("	test loop %d, alloc %s\n", i, (r==0)? "success" : "fail");
++		if (!r)
++			amdgpu_vprintf("	alloc on addr %#llx\n", va);
++		CU_ASSERT_TRUE((r == 0) ||
++			(r && i>=(0x840000000-0x800000000)/0x1000000));
++	}
++	for (i = VA_RANGE_TEST_CNT; i < VA_RANGE_TEST_CNT+VA_RANGE_TEST_INT_BEL_CNT; i++) {
++		r = amdgpu_va_range_alloc_in_range(device_handle,
++						amdgpu_gpu_va_range_general,
++						0x1000000, 9, 0,
++						0x600000000, 0x840000000,
++						&va, &va_handles[i], 0);
++		amdgpu_vprintf("	test loop %d, alloc %s\n", i, (r==0)? "success" : "fail");
++		if (!r)
++			amdgpu_vprintf("	alloc on addr %#llx\n", va);
++		CU_ASSERT_TRUE (r == 0 && va <=0x800000000);
++	}
++	for (i = VA_RANGE_TEST_CNT+VA_RANGE_TEST_INT_BEL_CNT; i < VA_RANGE_TEST_CNT+VA_RANGE_TEST_INT_BEL_CNT+VA_RANGE_TEST_INT_ABO_CNT; i++) {
++		r = amdgpu_va_range_alloc_in_range(device_handle,
++						amdgpu_gpu_va_range_general,
++						0x1000000, 9, 0,
++						0x800000000, 0x940000000,
++						&va, &va_handles[i], 0);
++		amdgpu_vprintf("	test loop %d, alloc %s\n", i, (r==0)? "success" : "fail");
++		if (!r)
++			amdgpu_vprintf("	alloc on addr %#llx\n", va);
++		CU_ASSERT_TRUE (r == 0 && va >= 0x840000000);
++	}
++	for (i = 0; i < VA_RANGE_TEST_CNT+VA_RANGE_TEST_INT_BEL_CNT+VA_RANGE_TEST_INT_ABO_CNT; i++) {
++		r = amdgpu_va_range_free(va_handles[i]);
++		CU_ASSERT_EQUAL(r, 0);
++	}
++}
+-- 
+2.7.4
+

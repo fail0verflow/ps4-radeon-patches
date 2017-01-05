@@ -1,0 +1,245 @@
+From cb0741a52b97b4cf14a3407e74b5bf3973735a2f Mon Sep 17 00:00:00 2001
+From: Alex Xie <AlexBin.Xie@amd.com>
+Date: Tue, 3 Nov 2015 11:03:21 -0500
+Subject: [PATCH 033/117] tests/amdgpu: Add verbose outputs v2
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+1. Add verbose output for information of compute rings.
+2. Add verbose output for other hardware information, probably for test of harvesting.
+3. Add verbose output for GPU information. This can provide information when reporting JIRA issue.
+4. Add verbose output for firmware version. This can provide developer with firmware information.
+
+v2: Use 8 for the maximum ring number in function amd_query_hw_info_test
+
+Change-Id: I6e37332345007625456b33a20d7bfb8850eb53d5
+Signed-off-by: Alex Xie <AlexBin.Xie@amd.com>
+Reviewed-by:Jammy Zhou<Jammy.Zhou@amd.com>
+Acked-by:Christian König<christian.koenig@amd.com>
+---
+ tests/amdgpu/amdgpu_test.c |  19 ++++++
+ tests/amdgpu/amdgpu_test.h |   1 +
+ tests/amdgpu/basic_tests.c | 149 ++++++++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 167 insertions(+), 2 deletions(-)
+
+diff --git a/tests/amdgpu/amdgpu_test.c b/tests/amdgpu/amdgpu_test.c
+index 1e71fbf..46f55c7 100644
+--- a/tests/amdgpu/amdgpu_test.c
++++ b/tests/amdgpu/amdgpu_test.c
+@@ -305,3 +305,22 @@ int amdgpu_num_devices()
+ {
+ 	return num_devices;
+ }
++
++/* Translate HW IP type to name. */
++char * amdgpu_hw_ip_type_to_name(unsigned type)
++{
++	switch (type) {
++	case AMDGPU_HW_IP_GFX:
++		return "graphic";
++	case AMDGPU_HW_IP_COMPUTE:
++		return "compute";
++	case AMDGPU_HW_IP_DMA:
++		return "DMA";
++	case AMDGPU_HW_IP_UVD:
++		return "UVD";
++	case AMDGPU_HW_IP_VCE:
++		return "VCE";
++	default:
++		return NULL;
++	}
++}
+diff --git a/tests/amdgpu/amdgpu_test.h b/tests/amdgpu/amdgpu_test.h
+index 5c47ba3..dd88eb5 100644
+--- a/tests/amdgpu/amdgpu_test.h
++++ b/tests/amdgpu/amdgpu_test.h
+@@ -108,6 +108,7 @@ extern CU_TestInfo vce_tests[];
+ void amdgpu_vprintf(char *fmt, ...);
+ void amdgpu_warning(bool condition, char *fmt, ...);
+ int amdgpu_num_devices();
++char * amdgpu_hw_ip_type_to_name(unsigned type);
+ 
+ static inline amdgpu_bo_handle gpu_mem_alloc(
+ 					amdgpu_device_handle device_handle,
+diff --git a/tests/amdgpu/basic_tests.c b/tests/amdgpu/basic_tests.c
+index 23178e0..47c796e 100644
+--- a/tests/amdgpu/basic_tests.c
++++ b/tests/amdgpu/basic_tests.c
+@@ -112,18 +112,161 @@ int suite_basic_tests_clean(void)
+ 		return CUE_SCLEAN_FAILED;
+ }
+ 
+-static void amdgpu_query_info_test(void)
++static void amdgpu_query_hw_info_test(unsigned type)
++{
++	int r;
++	int i;
++	bool first_ring = true;
++	struct drm_amdgpu_info_hw_ip ip_info;
++	char *name;
++
++	name = amdgpu_hw_ip_type_to_name(type);
++	CU_ASSERT_NOT_EQUAL(name, NULL);
++
++	r = amdgpu_query_hw_ip_info(device_handle, type,
++				0, &ip_info);
++
++	CU_ASSERT_EQUAL(r, 0);
++
++	amdgpu_vprintf("\n    %s HW IP...\n", name);
++	amdgpu_vprintf("    major version:%d\n", ip_info.hw_ip_version_major);
++	amdgpu_vprintf("    minor version:%d\n", ip_info.hw_ip_version_minor);
++	amdgpu_vprintf("    capabilities_flags:0x%llx\n",
++					ip_info.capabilities_flags);
++	amdgpu_vprintf("    IB start alignment:%d\n", ip_info.ib_start_alignment);
++	amdgpu_vprintf("    IB size alignment:%d\n", ip_info.ib_size_alignment);
++	amdgpu_vprintf("    Following rings are supported: ");
++	for (i = 0; i < 8; i++)
++		if (ip_info.available_rings & 1 << i) {
++			if (first_ring)
++				first_ring = false;
++			else
++				amdgpu_vprintf(", ");
++
++			amdgpu_vprintf("%d", i);
++		}
++
++	amdgpu_vprintf(".\n");
++}
++
++static void amdgpu_query_gpu_info_test()
+ {
+ 	struct amdgpu_gpu_info gpu_info = {0};
+-	uint32_t version, feature;
+ 	int r;
++	int i, j;
+ 
+ 	r = amdgpu_query_gpu_info(device_handle, &gpu_info);
+ 	CU_ASSERT_EQUAL(r, 0);
+ 
++	amdgpu_vprintf("\n    GPU info...\n");
++
++	amdgpu_vprintf("    Asic id:");
++	amdgpu_vprintf("0x%x\n", gpu_info.asic_id);
++	amdgpu_vprintf("    Chip revision:");
++	amdgpu_vprintf("0x%x\n", gpu_info.chip_rev);
++	amdgpu_vprintf("    Chip external revision:");
++	amdgpu_vprintf("0x%x\n", gpu_info.chip_external_rev);
++	amdgpu_vprintf("    Family ID:");
++	amdgpu_vprintf("0x%x\n", gpu_info.family_id);
++	amdgpu_vprintf("    Special flags:");
++	amdgpu_vprintf("0x%llx\n", gpu_info.ids_flags);
++	amdgpu_vprintf("    max engine clock:");
++	amdgpu_vprintf("0x%llx\n", gpu_info.max_engine_clk);
++	amdgpu_vprintf("    max memory clock:");
++	amdgpu_vprintf("0x%llx\n", gpu_info.max_memory_clk);
++	amdgpu_vprintf("    number of shader engines:");
++	amdgpu_vprintf("0x%x\n", gpu_info.num_shader_engines);
++	amdgpu_vprintf("    number of shader arrays per engine:");
++	amdgpu_vprintf("0x%x\n", gpu_info.num_shader_arrays_per_engine);
++	amdgpu_vprintf("    Number of available good shader pipes:");
++	amdgpu_vprintf("0x%x\n", gpu_info.avail_quad_shader_pipes);
++	amdgpu_vprintf("    Max. number of shader pipes."
++					"(including good and bad pipes :");
++	amdgpu_vprintf("0x%x\n", gpu_info.max_quad_shader_pipes);
++	amdgpu_vprintf("    Number of parameter cache entries per shader quad "
++					"pipe:");
++	amdgpu_vprintf("0x%x\n", gpu_info.cache_entries_per_quad_pipe);
++	amdgpu_vprintf("    Number of available graphics context:");
++	amdgpu_vprintf("0x%x\n", gpu_info.num_hw_gfx_contexts);
++	amdgpu_vprintf("    Number of render backend pipes:");
++	amdgpu_vprintf("0x%x\n", gpu_info.rb_pipes);
++	amdgpu_vprintf("    Enabled render backend pipe mask:");
++	amdgpu_vprintf("0x%x\n", gpu_info.enabled_rb_pipes_mask);
++	amdgpu_vprintf("    Frequency of GPU Counter:");
++	amdgpu_vprintf("0x%x\n", gpu_info.gpu_counter_freq);
++
++	amdgpu_vprintf("    CC_RB_BACKEND_DISABLE.BACKEND_DISABLE per SE:\n");
++	for (i = 0; i < 4; i++)
++		amdgpu_vprintf("      [%d]=0x%x\n", i, gpu_info.backend_disable[i]);
++
++	amdgpu_vprintf("    Value of MC_ARB_RAMCFG register:");
++	amdgpu_vprintf("0x%x\n", gpu_info.mc_arb_ramcfg);
++	amdgpu_vprintf("    Value of GB_ADDR_CONFIG:");
++	amdgpu_vprintf("0x%x\n", gpu_info.gb_addr_cfg);
++
++	amdgpu_vprintf("    Values of the GB_TILE_MODE0..31 registers:\n");
++	for (i = 0; i < 32; i++)
++		amdgpu_vprintf("      [%d]=0x%x\n", i, gpu_info.gb_tile_mode[i]);
++
++	amdgpu_vprintf("    Values of GB_MACROTILE_MODE0..15 registers:\n");
++	for (i = 0; i < 16; i++)
++		amdgpu_vprintf("      [%d]=0x%x\n", i, gpu_info.gb_macro_tile_mode[i]);
++
++	amdgpu_vprintf("    Value of PA_SC_RASTER_CONFIG register per SE:\n");
++	for (i = 0; i < 4; i++)
++		amdgpu_vprintf("      [%d]=0x%x\n", i, gpu_info.pa_sc_raster_cfg[i]);
++
++	amdgpu_vprintf("    Value of PA_SC_RASTER_CONFIG_1 register per SE:\n");
++	for (i = 0; i < 4; i++)
++		amdgpu_vprintf("      [%d]=0x%x\n", i, gpu_info.pa_sc_raster_cfg1[i]);
++
++	amdgpu_vprintf("    CU info (active number):");
++	amdgpu_vprintf("0x%x\n", gpu_info.cu_active_number);
++	amdgpu_vprintf("    CU info (AU mask):");
++	amdgpu_vprintf("0x%x\n", gpu_info.cu_ao_mask);
++
++	amdgpu_vprintf("    CU info (AU bit map):");
++	for (i = 0; i < 4; i++) {
++		amdgpu_vprintf("\n      ");
++		for (j = 0; j < 4; j++)
++			amdgpu_vprintf(" [%d][%d]=0x%08x", i, j, gpu_info.cu_bitmap[i][j]);
++	}
++	amdgpu_vprintf("\n");
++
++	amdgpu_vprintf("    video memory type info:");
++	amdgpu_vprintf("0x%x\n", gpu_info.vram_type);
++	amdgpu_vprintf("    video memory bit width:");
++	amdgpu_vprintf("0x%x\n", gpu_info.vram_bit_width);
++	amdgpu_vprintf("    constant engine ram size:");
++	amdgpu_vprintf("0x%x\n", gpu_info.ce_ram_size);
++	amdgpu_vprintf("    vce harvesting instance:");
++	amdgpu_vprintf("0x%x\n", gpu_info.vce_harvest_config);
++	amdgpu_vprintf("    PCI revision ID:");
++	amdgpu_vprintf("0x%x\n", gpu_info.pci_rev_id);
++}
++
++static void amdgpu_query_firmware_info_test(void)
++{
++	uint32_t version, feature;
++	int r;
++
+ 	r = amdgpu_query_firmware_version(device_handle, AMDGPU_INFO_FW_VCE, 0,
+ 					  0, &version, &feature);
+ 	CU_ASSERT_EQUAL(r, 0);
++	amdgpu_vprintf("\n    VCE firmware info...\n");
++	amdgpu_vprintf("    vce version: 0x%x\n", version);
++	amdgpu_vprintf("    vce feature: 0x%x\n", feature);
++}
++
++static void amdgpu_query_info_test(void)
++{
++	amdgpu_query_gpu_info_test();
++	amdgpu_query_firmware_info_test();
++	amdgpu_query_hw_info_test(AMDGPU_HW_IP_GFX);
++	amdgpu_query_hw_info_test(AMDGPU_HW_IP_COMPUTE);
++	amdgpu_query_hw_info_test(AMDGPU_HW_IP_DMA);
++	amdgpu_query_hw_info_test(AMDGPU_HW_IP_UVD);
++	amdgpu_query_hw_info_test(AMDGPU_HW_IP_VCE);
+ }
+ 
+ static void amdgpu_memory_alloc(void)
+@@ -491,7 +634,9 @@ static void amdgpu_command_submission_compute(void)
+ 	r = amdgpu_cs_ctx_create(device_handle, &context_handle);
+ 	CU_ASSERT_EQUAL(r, 0);
+ 
++	amdgpu_vprintf("\n");
+ 	for (instance = 0; instance < 8; instance++) {
++		amdgpu_vprintf("    Submit NOP command on ring %d.\n", instance);
+ 		r = amdgpu_bo_alloc_and_map(device_handle, 4096, 4096,
+ 					    AMDGPU_GEM_DOMAIN_GTT, 0,
+ 					    &ib_result_handle, &ib_result_cpu,
+-- 
+2.7.4
+
